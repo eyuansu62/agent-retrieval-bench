@@ -1,0 +1,40 @@
+{
+  "evaluated": 35,
+  "keep_list": "data/audit/v0_clean/keep_samples.jsonl",
+  "metrics": {
+    "code2test": {
+      "MRR": 0.14183936163353159,
+      "Recall@10": 0.29411764705882354,
+      "Recall@20": 0.36764705882352944,
+      "Recall@5": 0.23529411764705882,
+      "gold_coverage@8k": 0.11764705882352941,
+      "samples": 17
+    },
+    "comment2context": {
+      "MRR": 0.96875,
+      "Recall@10": 1.0,
+      "Recall@20": 1.0,
+      "Recall@5": 1.0,
+      "gold_coverage@8k": 1.0,
+      "samples": 16
+    },
+    "overall": {
+      "MRR": 0.5546076899362868,
+      "Recall@10": 0.6571428571428571,
+      "Recall@20": 0.6928571428571428,
+      "Recall@5": 0.6285714285714286,
+      "gold_coverage@8k": 0.5714285714285714,
+      "samples": 35
+    },
+    "trace2code": {
+      "MRR": 0.75,
+      "Recall@10": 1.0,
+      "Recall@20": 1.0,
+      "Recall@5": 1.0,
+      "gold_coverage@8k": 1.0,
+      "samples": 2
+    }
+  },
+  "mode": "corpus",
+  "skipped": {}
+}

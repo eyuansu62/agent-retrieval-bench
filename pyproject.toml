@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agent-retrieval-bench"
+version = "0.1.0"
+description = "GitHub crawler and dataset builder for action-oriented agent retrieval benchmarks."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+arb = "agent_retrieval_bench.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+

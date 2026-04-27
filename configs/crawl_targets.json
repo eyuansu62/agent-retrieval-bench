@@ -1,0 +1,75 @@
+{
+  "primary": [
+    {
+      "repo": "pytest-dev/pytest",
+      "language": "Python",
+      "tasks": ["testlog2code", "trace2code", "code2test"]
+    },
+    {
+      "repo": "fastapi/fastapi",
+      "language": "Python",
+      "tasks": ["trace2code", "comment2context"]
+    },
+    {
+      "repo": "huggingface/transformers",
+      "language": "Python",
+      "tasks": ["comment2context", "code2test", "deep_context"]
+    },
+    {
+      "repo": "huggingface/diffusers",
+      "language": "Python",
+      "tasks": ["testlog2code", "code2test", "deep_context"]
+    },
+    {
+      "repo": "vitejs/vite",
+      "language": "TypeScript",
+      "tasks": ["testlog2code", "comment2context"]
+    },
+    {
+      "repo": "vuejs/core",
+      "language": "TypeScript",
+      "tasks": ["comment2context", "code2test"]
+    },
+    {
+      "repo": "spring-projects/spring-boot",
+      "language": "Java",
+      "tasks": ["testlog2code", "trace2code"]
+    },
+    {
+      "repo": "mockito/mockito",
+      "language": "Java",
+      "tasks": ["testlog2code", "code2test"]
+    },
+    {
+      "repo": "gin-gonic/gin",
+      "language": "Go",
+      "tasks": ["trace2code", "comment2context"]
+    },
+    {
+      "repo": "etcd-io/etcd",
+      "language": "Go",
+      "tasks": ["testlog2code", "trace2code"]
+    },
+    {
+      "repo": "tokio-rs/tokio",
+      "language": "Rust",
+      "tasks": ["trace2code", "comment2context"]
+    },
+    {
+      "repo": "clap-rs/clap",
+      "language": "Rust",
+      "tasks": ["testlog2code", "code2test"]
+    }
+  ],
+  "reserve": [
+    "pydantic/pydantic",
+    "sqlalchemy/sqlalchemy",
+    "axios/axios",
+    "remix-run/react-router",
+    "junit-team/junit5",
+    "caddyserver/caddy",
+    "hyperium/hyper",
+    "BurntSushi/ripgrep"
+  ]
+}
+
