@@ -24,6 +24,12 @@ data/reports/v0_1/
 
 V0.1 intentionally excludes `testlog2code`: the audited cleaned slice had only 7 valid samples out of 44, so it is not reliable enough for this release.
 
+The prebuilt V0.1 corpus is hosted on Hugging Face Datasets:
+
+```text
+https://huggingface.co/datasets/eyuansu71/agent_retrieval_bench
+```
+
 ## Setup
 
 No runtime dependencies are required beyond Python 3.10+.
@@ -44,14 +50,13 @@ Validate the checked-in benchmark samples:
 arb validate data/benchmark/v0_1/*.jsonl
 ```
 
-The candidate corpus is not committed because it is large. To reproduce the bundled lexical baseline, materialize the corpus from public repositories at each sample `base_commit`:
+The candidate corpus is not committed to GitHub because it is large. Download the prebuilt V0.1 corpus from Hugging Face into the repo-local `data/` directory:
 
 ```bash
-arb build-corpus \
-  --derived data/benchmark/v0_1 \
-  --keep-list data/audit/v0_clean/keep_samples.jsonl \
-  --repos-dir data/repos \
-  --out data/corpus/v0_1
+hf download eyuansu71/agent_retrieval_bench \
+  --type dataset \
+  --local-dir data \
+  --include "corpus/v0_1/**"
 ```
 
 Run the lexical/exact retrieval baseline:
