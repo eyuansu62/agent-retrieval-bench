@@ -13,6 +13,11 @@ from .curate import export_curated_samples
 from .crawler import crawl_repo, write_manifest
 from .derive import derive_repo
 from .diagnostics import diagnose_benchmark
+from .embedding_eval import (
+    default_embedding_cache_dir,
+    default_embedding_summary_path,
+    evaluate_embedding_baseline,
+)
 from .github_api import GitHubAPI
 from .io import load_targets, read_jsonl, repo_slug
 from .logs import crawl_job_logs
@@ -122,6 +127,29 @@ def main(argv: list[str] | None = None) -> int:
     baseline.add_argument("--no-keep-list", action="store_true")
     baseline.add_argument("--limit-samples", type=int)
     baseline.add_argument("--dry-run", action="store_true", help="Use sample gold/supporting paths as a tiny synthetic corpus.")
+
+    embedding = subparsers.add_parser("eval-embedding", help="Run an embedding retrieval baseline.")
+    embedding.add_argument(
+        "samples",
+        nargs="*",
+        type=Path,
+        help="Benchmark sample JSONL files. Defaults to --derived/*.jsonl.",
+    )
+    embedding.add_argument("--derived", type=Path, default=Path("data/benchmark/v0_1"))
+    embedding.add_argument("--corpus", type=Path, default=Path("data/corpus/v0_1"))
+    embedding.add_argument("--model", required=True, help="SentenceTransformer-compatible model name or path.")
+    embedding.add_argument("--out", type=Path)
+    embedding.add_argument("--details", type=Path)
+    embedding.add_argument("--cache", type=Path)
+    embedding.add_argument("--keep-list", type=Path, default=Path("data/audit/v0_clean/keep_samples.jsonl"))
+    embedding.add_argument("--no-keep-list", action="store_true")
+    embedding.add_argument("--limit-samples", type=int)
+    embedding.add_argument("--batch-size", type=int, default=32)
+    embedding.add_argument("--device", help="SentenceTransformer device, e.g. cpu, cuda, mps.")
+    embedding.add_argument("--query-prefix", default="")
+    embedding.add_argument("--passage-prefix", default="")
+    embedding.add_argument("--no-normalize", action="store_true", help="Disable embedding normalization.")
+    embedding.add_argument("--trust-remote-code", action="store_true")
 
     diagnose = subparsers.add_parser("diagnose", help="Diagnose benchmark difficulty and baseline quality.")
     diagnose.add_argument("--samples", type=Path, default=Path("data/benchmark/v0_1/samples.jsonl"))
@@ -248,6 +276,28 @@ def main(argv: list[str] | None = None) -> int:
             keep_list=keep_list,
             limit_samples=args.limit_samples,
             dry_run=args.dry_run,
+        )
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return 0
+    if args.command == "eval-embedding":
+        sample_paths = args.samples or sample_paths_from_derived(args.derived)
+        keep_list = None if args.no_keep_list else args.keep_list
+        out_path = args.out or default_embedding_summary_path(args.model)
+        result = evaluate_embedding_baseline(
+            sample_paths=sample_paths,
+            corpus_dir=args.corpus,
+            model_name=args.model,
+            out_path=out_path,
+            details_path=args.details or default_baseline_details_path(out_path),
+            keep_list=keep_list,
+            cache_dir=args.cache or default_embedding_cache_dir(args.model),
+            limit_samples=args.limit_samples,
+            batch_size=args.batch_size,
+            device=args.device,
+            query_prefix=args.query_prefix,
+            passage_prefix=args.passage_prefix,
+            normalize_embeddings=not args.no_normalize,
+            trust_remote_code=args.trust_remote_code,
         )
         print(json.dumps(result, indent=2, ensure_ascii=False))
         return 0

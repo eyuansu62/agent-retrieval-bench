@@ -40,6 +40,12 @@ python3 -m venv .venv
 pip install -e .
 ```
 
+Install optional embedding dependencies only when running embedding model evaluations:
+
+```bash
+pip install -e ".[embedding]"
+```
+
 No GitHub API token is required to inspect the checked-in V0.1 benchmark, validate samples, or read the published baseline and diagnostic report.
 
 ## Evaluate V0.1
@@ -67,6 +73,16 @@ arb eval-baseline \
   --keep-list data/audit/v0_clean/keep_samples.jsonl \
   --corpus data/corpus/v0_1 \
   --out data/eval/v0_1/lexical_summary.json
+```
+
+Run an embedding model evaluation:
+
+```bash
+arb eval-embedding \
+  --model jinaai/jina-code-embeddings-0.5b \
+  --derived data/benchmark/v0_1 \
+  --keep-list data/audit/v0_clean/keep_samples.jsonl \
+  --corpus data/corpus/v0_1
 ```
 
 Regenerate the diagnostic report:

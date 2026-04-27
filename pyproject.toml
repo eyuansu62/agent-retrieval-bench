@@ -10,9 +10,14 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = []
 
+[project.optional-dependencies]
+embedding = [
+    "numpy>=1.26",
+    "sentence-transformers>=3.0.0",
+]
+
 [project.scripts]
 arb = "agent_retrieval_bench.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-
