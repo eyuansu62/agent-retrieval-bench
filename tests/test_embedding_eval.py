@@ -1,4 +1,5 @@
 import json
+import io
 import tempfile
 import unittest
 from pathlib import Path
@@ -123,6 +124,59 @@ class EmbeddingEvalTests(unittest.TestCase):
             self.assertEqual(result["skipped"], {"query_leakage": 1})
         self.assertEqual(result["metrics"]["code2test"]["Recall@5"], 1.0)
         self.assertEqual(result["metrics"]["code2test"]["MRR"], 1.0)
+
+    def test_embedding_baseline_reports_progress_when_enabled(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            samples = root / "samples.jsonl"
+            corpus_dir = root / "corpus"
+            chunks_path = corpus_dir / "o__r" / "base.chunks.jsonl"
+            write_jsonl(
+                samples,
+                [
+                    {
+                        "id": "s1",
+                        "task_type": "code2test",
+                        "repo": "o/r",
+                        "base_commit": "base",
+                        "query": {"changed_file": "src/auth.py", "intent": "auth failure"},
+                        "gold": {"related_tests": ["tests/test_auth.py"], "fix_commit": "fix"},
+                    }
+                ],
+            )
+            write_jsonl(
+                chunks_path,
+                [
+                    {
+                        "chunk_id": "c1",
+                        "repo": "o/r",
+                        "base_commit": "base",
+                        "path": "tests/test_auth.py",
+                        "kind": "file",
+                        "text": "auth assertion",
+                    }
+                ],
+            )
+            write_jsonl(
+                corpus_dir / "corpus_manifest.jsonl",
+                [{"repo": "o/r", "base_commit": "base", "status": "ok", "chunks_path": str(chunks_path)}],
+            )
+            stream = io.StringIO()
+
+            evaluate_embedding_baseline(
+                sample_paths=[samples],
+                corpus_dir=corpus_dir,
+                model_name="keyword",
+                embedder=KeywordEmbedder(),
+                cache_dir=None,
+                progress=True,
+                progress_stream=stream,
+            )
+
+            output = stream.getvalue()
+            self.assertIn("loading embedding model", output)
+            self.assertIn("encoding chunks without cache", output)
+            self.assertIn("evaluating samples", output)
 
     def test_embedding_cache_is_keyed_by_passage_options(self):
         try:

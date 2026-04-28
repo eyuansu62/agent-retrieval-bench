@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 from collections import Counter
 from pathlib import Path
-from typing import Any, Iterable, Protocol, Sequence
+from typing import Any, Iterable, Protocol, Sequence, TextIO
 
 from .baseline import (
     iter_samples,
@@ -48,6 +49,7 @@ class SentenceTransformerEmbedder:
             kwargs["trust_remote_code"] = True
         self.model_name = model_name
         self.normalize_embeddings = normalize_embeddings
+        self.show_progress_bar = False
         self.model = SentenceTransformer(model_name, **kwargs)
 
     def encode(self, texts: Sequence[str], batch_size: int = 32) -> Any:
@@ -56,7 +58,7 @@ class SentenceTransformerEmbedder:
             batch_size=batch_size,
             convert_to_numpy=True,
             normalize_embeddings=self.normalize_embeddings,
-            show_progress_bar=False,
+            show_progress_bar=self.show_progress_bar,
         )
 
 
@@ -76,42 +78,63 @@ def evaluate_embedding_baseline(
     normalize_embeddings: bool = True,
     trust_remote_code: bool = False,
     embedder: TextEmbedder | None = None,
+    progress: bool = False,
+    progress_stream: TextIO | None = None,
 ) -> dict[str, Any]:
+    reporter = ProgressReporter(progress, progress_stream)
+    reporter.message(f"loading embedding model: {model_name}")
     actual_embedder = embedder or SentenceTransformerEmbedder(
         model_name,
         device=device,
         normalize_embeddings=normalize_embeddings,
         trust_remote_code=trust_remote_code,
     )
+    reporter.message("embedding model loaded")
+    reporter.message(f"loading corpus manifest: {corpus_dir / 'corpus_manifest.jsonl'}")
     manifest = load_corpus_manifest(corpus_dir)
+    reporter.message(f"loaded corpus manifest: {len(manifest)} commit corpora")
     keep_ids = load_keep_ids(keep_list)
+    if keep_list:
+        if keep_ids is None:
+            reporter.message(f"keep list not found, evaluating all samples: {keep_list}")
+        else:
+            reporter.message(f"loaded keep list: {len(keep_ids)} ids")
+    samples = list(filter_samples(iter_samples(sample_paths), keep_ids))
+    if limit_samples:
+        samples = samples[:limit_samples]
+    reporter.message(f"loaded benchmark samples: {len(samples)}")
     vector_cache: dict[tuple[str, str], Any] = {}
     chunk_cache: dict[tuple[str, str], list[dict[str, Any]]] = {}
     details: list[dict[str, Any]] = []
     skipped = Counter()
     evaluated = 0
-    for sample in filter_samples(iter_samples(sample_paths), keep_ids):
-        if limit_samples and evaluated + sum(skipped.values()) >= limit_samples:
-            break
+    sample_bar = reporter.bar("evaluating samples", len(samples))
+    for sample in samples:
         gold_files = target_gold_files(sample)
         if not gold_files:
             skipped["no_gold"] += 1
+            sample_bar.update(suffix=f"evaluated={evaluated} skipped={sum(skipped.values())}")
             continue
         query_text = query_prefix + query_text_for_eval(sample)
         if query_has_leakage(sample, query_text):
             skipped["query_leakage"] += 1
+            sample_bar.update(suffix=f"evaluated={evaluated} skipped={sum(skipped.values())}")
             continue
         key = (sample.get("repo"), sample.get("base_commit"))
         chunks_path = manifest.get(key)
         if not chunks_path:
             skipped["missing_corpus"] += 1
+            sample_bar.update(suffix=f"evaluated={evaluated} skipped={sum(skipped.values())}")
             continue
         chunks = chunk_cache.get(key)
         if chunks is None:
+            reporter.message(f"loading chunks: {sample.get('repo')} {str(sample.get('base_commit', ''))[:12]}")
             chunks = read_jsonl(chunks_path)
             chunk_cache[key] = chunks
+            reporter.message(f"loaded chunks: {len(chunks)} from {chunks_path}")
         if not chunks:
             skipped["empty_corpus"] += 1
+            sample_bar.update(suffix=f"evaluated={evaluated} skipped={sum(skipped.values())}")
             continue
         vectors = vector_cache.get(key)
         if vectors is None:
@@ -124,9 +147,10 @@ def evaluate_embedding_baseline(
                 batch_size=batch_size,
                 passage_prefix=passage_prefix,
                 normalize_embeddings=normalize_embeddings,
+                progress_reporter=reporter,
             )
             vector_cache[key] = vectors
-        query_vector = encode_texts(actual_embedder, [query_text], batch_size=batch_size)[0]
+        query_vector = encode_texts(actual_embedder, [query_text], batch_size=batch_size, show_progress_bar=False)[0]
         ranked = rank_chunks_by_vectors(query_vector, vectors, chunks)
         metrics = sample_metrics(gold_files, ranked)
         details.append(
@@ -141,6 +165,8 @@ def evaluate_embedding_baseline(
             }
         )
         evaluated += 1
+        sample_bar.update(suffix=f"evaluated={evaluated} skipped={sum(skipped.values())}")
+    sample_bar.finish(suffix=f"evaluated={evaluated} skipped={sum(skipped.values())}")
 
     summary = summarize_details(details)
     result = {
@@ -172,12 +198,16 @@ def load_or_encode_chunk_vectors(
     batch_size: int = 32,
     passage_prefix: str = "",
     normalize_embeddings: bool = True,
+    progress_reporter: "ProgressReporter | None" = None,
 ) -> Any:
+    reporter = progress_reporter or ProgressReporter(False)
     if cache_dir is None:
+        reporter.message(f"encoding chunks without cache: {len(chunks)} chunks")
         return encode_texts(
             embedder,
             chunk_texts_for_embedding(chunks, passage_prefix=passage_prefix),
             batch_size=batch_size,
+            show_progress_bar=reporter.enabled,
         )
 
     np = import_numpy()
@@ -195,10 +225,15 @@ def load_or_encode_chunk_vectors(
             and meta.get("passage_prefix") == passage_prefix
             and meta.get("normalize_embeddings") == normalize_embeddings
         ):
+            reporter.message(f"embedding cache hit: {vectors_path}")
             return np.load(vectors_path)
 
     texts = chunk_texts_for_embedding(chunks, passage_prefix=passage_prefix)
-    vectors = np.asarray(encode_texts(embedder, texts, batch_size=batch_size), dtype="float32")
+    reporter.message(f"encoding chunks: {len(texts)} chunks -> {vectors_path}")
+    vectors = np.asarray(
+        encode_texts(embedder, texts, batch_size=batch_size, show_progress_bar=reporter.enabled),
+        dtype="float32",
+    )
     ensure_parent(vectors_path)
     np.save(vectors_path, vectors)
     meta_path.write_text(
@@ -221,11 +256,23 @@ def load_or_encode_chunk_vectors(
     return vectors
 
 
-def encode_texts(embedder: TextEmbedder, texts: Sequence[str], batch_size: int = 32) -> Sequence[Sequence[float]]:
+def encode_texts(
+    embedder: TextEmbedder,
+    texts: Sequence[str],
+    batch_size: int = 32,
+    show_progress_bar: bool = False,
+) -> Sequence[Sequence[float]]:
+    previous_progress = getattr(embedder, "show_progress_bar", None)
+    if previous_progress is not None:
+        setattr(embedder, "show_progress_bar", show_progress_bar)
     try:
-        return embedder.encode(texts, batch_size=batch_size)
-    except TypeError:
-        return embedder.encode(texts)  # type: ignore[call-arg]
+        try:
+            return embedder.encode(texts, batch_size=batch_size)
+        except TypeError:
+            return embedder.encode(texts)  # type: ignore[call-arg]
+    finally:
+        if previous_progress is not None:
+            setattr(embedder, "show_progress_bar", previous_progress)
 
 
 def rank_chunks_by_vectors(query_vector: Sequence[float], chunk_vectors: Any, chunks: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -251,6 +298,68 @@ def vector_scores(query_vector: Sequence[float], chunk_vectors: Any) -> list[flo
 
 def dot_product(left: Sequence[float], right: Sequence[float]) -> float:
     return sum(float(a) * float(b) for a, b in zip(left, right))
+
+
+class ProgressReporter:
+    def __init__(self, enabled: bool = False, stream: TextIO | None = None) -> None:
+        self.enabled = enabled
+        self.stream = stream or sys.stderr
+        self.line_open = False
+
+    def message(self, text: str) -> None:
+        if not self.enabled:
+            return
+        if self.line_open:
+            print(file=self.stream, flush=True)
+            self.line_open = False
+        print(f"[arb] {text}", file=self.stream, flush=True)
+
+    def bar(self, label: str, total: int) -> "ProgressBar":
+        return ProgressBar(label=label, total=total, reporter=self)
+
+
+class ProgressBar:
+    def __init__(self, label: str, total: int, reporter: ProgressReporter) -> None:
+        self.label = label
+        self.total = max(0, total)
+        self.reporter = reporter
+        self.current = 0
+        self.rendered = False
+        if self.reporter.enabled:
+            self._render()
+
+    def update(self, step: int = 1, suffix: str = "") -> None:
+        if not self.reporter.enabled:
+            return
+        self.current = min(self.total, self.current + step)
+        self._render(suffix=suffix)
+
+    def finish(self, suffix: str = "") -> None:
+        if not self.reporter.enabled or not self.rendered:
+            return
+        self.current = self.total
+        self._render(suffix=suffix)
+        print(file=self.reporter.stream, flush=True)
+        self.reporter.line_open = False
+
+    def _render(self, suffix: str = "") -> None:
+        width = 28
+        if self.total:
+            filled = int(width * self.current / self.total)
+            percent = int(100 * self.current / self.total)
+        else:
+            filled = width
+            percent = 100
+        bar = "#" * filled + "-" * (width - filled)
+        suffix_text = f" {suffix}" if suffix else ""
+        print(
+            f"\r[arb] {self.label}: [{bar}] {self.current}/{self.total} {percent:3d}%{suffix_text}",
+            end="",
+            file=self.reporter.stream,
+            flush=True,
+        )
+        self.reporter.line_open = True
+        self.rendered = True
 
 
 def chunk_texts_for_embedding(chunks: list[dict[str, Any]], passage_prefix: str = "") -> list[str]:

@@ -149,6 +149,7 @@ def main(argv: list[str] | None = None) -> int:
     embedding.add_argument("--query-prefix", default="")
     embedding.add_argument("--passage-prefix", default="")
     embedding.add_argument("--no-normalize", action="store_true", help="Disable embedding normalization.")
+    embedding.add_argument("--no-progress", action="store_true", help="Disable embedding evaluation progress output.")
     embedding.add_argument("--trust-remote-code", action="store_true")
 
     diagnose = subparsers.add_parser("diagnose", help="Diagnose benchmark difficulty and baseline quality.")
@@ -298,6 +299,7 @@ def main(argv: list[str] | None = None) -> int:
             passage_prefix=args.passage_prefix,
             normalize_embeddings=not args.no_normalize,
             trust_remote_code=args.trust_remote_code,
+            progress=not args.no_progress,
         )
         print(json.dumps(result, indent=2, ensure_ascii=False))
         return 0

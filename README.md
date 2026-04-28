@@ -85,6 +85,8 @@ arb eval-embedding \
   --corpus data/corpus/v0_1
 ```
 
+Embedding evaluation prints progress by default, including model loading, corpus loading, cache hits/misses, chunk encoding, and sample evaluation. Use `--no-progress` for quiet runs. The first run for a model can be slow because it embeds full base-commit corpora; later runs reuse `data/embeddings/v0_1/`.
+
 Regenerate the diagnostic report:
 
 ```bash
