@@ -118,10 +118,15 @@ class EmbeddingEvalTests(unittest.TestCase):
                 model_name="keyword",
                 embedder=KeywordEmbedder(),
                 cache_dir=None,
+                details_path=root / "details.jsonl",
             )
+            detail = json.loads((root / "details.jsonl").read_text(encoding="utf-8").splitlines()[0])
 
             self.assertEqual(result["evaluated"], 1)
+            self.assertEqual(result["candidate_filter"], "all_files")
             self.assertEqual(result["skipped"], {"query_leakage": 1})
+            self.assertEqual(detail["candidate_filter"], "all_files")
+            self.assertEqual(detail["gold_ranks"], {"tests/test_auth.py": 1})
         self.assertEqual(result["metrics"]["code2test"]["Recall@5"], 1.0)
         self.assertEqual(result["metrics"]["code2test"]["MRR"], 1.0)
 
@@ -171,6 +176,7 @@ class EmbeddingEvalTests(unittest.TestCase):
                 cache_dir=None,
                 progress=True,
                 progress_stream=stream,
+                candidate_filter="tests_only",
             )
 
             output = stream.getvalue()
@@ -201,8 +207,9 @@ class EmbeddingEvalTests(unittest.TestCase):
             load_or_encode_chunk_vectors(chunks, chunks_path, embedder, "keyword", root / "cache")
             load_or_encode_chunk_vectors(chunks, chunks_path, embedder, "keyword", root / "cache")
             load_or_encode_chunk_vectors(chunks, chunks_path, embedder, "keyword", root / "cache", passage_prefix="noise ")
+            load_or_encode_chunk_vectors(chunks, chunks_path, embedder, "keyword", root / "cache", candidate_filter="tests_only")
 
-            self.assertEqual(embedder.calls, 2)
+            self.assertEqual(embedder.calls, 3)
 
     def test_embedding_text_and_default_paths_are_stable(self):
         text = chunk_text_for_embedding(
@@ -215,6 +222,10 @@ class EmbeddingEvalTests(unittest.TestCase):
         self.assertEqual(
             default_embedding_summary_path("jinaai/jina-code-embeddings-0.5b"),
             Path("data/eval/v0_1/jinaai-jina-code-embeddings-0.5b_summary.json"),
+        )
+        self.assertEqual(
+            default_embedding_summary_path("jinaai/jina-code-embeddings-0.5b", candidate_filter="tests_only"),
+            Path("data/eval/v0_1/jinaai-jina-code-embeddings-0.5b_tests_only_summary.json"),
         )
         self.assertEqual(
             default_embedding_cache_dir("jinaai/jina-code-embeddings-0.5b"),

@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 from .audit import summarize_audit, write_audit_sample
-from .baseline import evaluate_lexical_baseline
+from .baseline import CANDIDATE_FILTERS, evaluate_lexical_baseline
 from .clone import verify_base_commits
 from .corpus import build_candidate_corpus, sample_paths_from_derived
 from .curate import export_curated_samples
@@ -121,11 +121,12 @@ def main(argv: list[str] | None = None) -> int:
     baseline.add_argument("samples", nargs="*", type=Path, help="Derived sample JSONL files. Defaults to --derived/*.jsonl.")
     baseline.add_argument("--derived", type=Path, default=Path("data/derived"))
     baseline.add_argument("--corpus", type=Path, default=Path("data/corpus/v0"))
-    baseline.add_argument("--out", type=Path, default=Path("data/eval/v0/lexical_summary.json"))
+    baseline.add_argument("--out", type=Path)
     baseline.add_argument("--details", type=Path)
     baseline.add_argument("--keep-list", type=Path, default=Path("data/audit/v0/keep_samples.jsonl"))
     baseline.add_argument("--no-keep-list", action="store_true")
     baseline.add_argument("--limit-samples", type=int)
+    baseline.add_argument("--candidate-filter", choices=CANDIDATE_FILTERS, default="all_files")
     baseline.add_argument("--dry-run", action="store_true", help="Use sample gold/supporting paths as a tiny synthetic corpus.")
 
     embedding = subparsers.add_parser("eval-embedding", help="Run an embedding retrieval baseline.")
@@ -144,6 +145,7 @@ def main(argv: list[str] | None = None) -> int:
     embedding.add_argument("--keep-list", type=Path, default=Path("data/audit/v0_clean/keep_samples.jsonl"))
     embedding.add_argument("--no-keep-list", action="store_true")
     embedding.add_argument("--limit-samples", type=int)
+    embedding.add_argument("--candidate-filter", choices=CANDIDATE_FILTERS, default="all_files")
     embedding.add_argument("--batch-size", type=int, default=32)
     embedding.add_argument("--device", help="SentenceTransformer device, e.g. cpu, cuda, mps.")
     embedding.add_argument("--query-prefix", default="")
@@ -269,21 +271,23 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "eval-baseline":
         sample_paths = args.samples or sample_paths_from_derived(args.derived)
         keep_list = None if args.no_keep_list else args.keep_list
+        out_path = args.out or default_lexical_summary_path(args.candidate_filter)
         result = evaluate_lexical_baseline(
             sample_paths=sample_paths,
             corpus_dir=args.corpus,
-            out_path=args.out,
-            details_path=args.details or default_baseline_details_path(args.out),
+            out_path=out_path,
+            details_path=args.details or default_baseline_details_path(out_path),
             keep_list=keep_list,
             limit_samples=args.limit_samples,
             dry_run=args.dry_run,
+            candidate_filter=args.candidate_filter,
         )
         print(json.dumps(result, indent=2, ensure_ascii=False))
         return 0
     if args.command == "eval-embedding":
         sample_paths = args.samples or sample_paths_from_derived(args.derived)
         keep_list = None if args.no_keep_list else args.keep_list
-        out_path = args.out or default_embedding_summary_path(args.model)
+        out_path = args.out or default_embedding_summary_path(args.model, candidate_filter=args.candidate_filter)
         result = evaluate_embedding_baseline(
             sample_paths=sample_paths,
             corpus_dir=args.corpus,
@@ -300,6 +304,7 @@ def main(argv: list[str] | None = None) -> int:
             normalize_embeddings=not args.no_normalize,
             trust_remote_code=args.trust_remote_code,
             progress=not args.no_progress,
+            candidate_filter=args.candidate_filter,
         )
         print(json.dumps(result, indent=2, ensure_ascii=False))
         return 0
@@ -321,6 +326,11 @@ def default_baseline_details_path(out_path: Path) -> Path:
     if out_path.stem.endswith("_summary"):
         return out_path.with_name(f"{out_path.stem.removesuffix('_summary')}_details.jsonl")
     return out_path.with_suffix(".details.jsonl")
+
+
+def default_lexical_summary_path(candidate_filter: str = "all_files", root: Path = Path("data/eval/v0")) -> Path:
+    suffix = "_summary" if candidate_filter == "all_files" else f"_{candidate_filter}_summary"
+    return root / f"lexical{suffix}.json"
 
 
 def _repos_from_raw(raw_dir: Path) -> list[str]:

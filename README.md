@@ -82,10 +82,13 @@ arb eval-embedding \
   --model jinaai/jina-code-embeddings-0.5b \
   --derived data/benchmark/v0_1 \
   --keep-list data/audit/v0_clean/keep_samples.jsonl \
-  --corpus data/corpus/v0_1
+  --corpus data/corpus/v0_1 \
+  --candidate-filter all_files
 ```
 
 Embedding evaluation prints progress by default, including model loading, corpus loading, cache hits/misses, chunk encoding, and sample evaluation. Use `--no-progress` for quiet runs. The first run for a model can be slow because it embeds full base-commit corpora; later runs reuse `data/embeddings/v0_1/`.
+
+Use `--candidate-filter tests_only` to isolate `code2test` behavior against test files, or `--candidate-filter code_only` to exclude docs/changelogs/templates from the candidate set. Details JSONL includes `gold_ranks` for each gold file, with `null` when the gold file is not retrieved.
 
 Regenerate the diagnostic report:
 

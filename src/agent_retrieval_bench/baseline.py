@@ -12,6 +12,67 @@ from .filters import contains_raw_patch_marker
 from .io import ensure_parent, read_jsonl, stable_id
 
 TOKEN_RE = re.compile(r"[A-Za-z0-9]+")
+CANDIDATE_FILTERS = ("all_files", "code_only", "tests_only")
+CODE_EXTENSIONS = {
+    ".bash",
+    ".c",
+    ".cc",
+    ".cpp",
+    ".cs",
+    ".cxx",
+    ".fish",
+    ".go",
+    ".h",
+    ".hpp",
+    ".java",
+    ".js",
+    ".jsx",
+    ".kt",
+    ".kts",
+    ".m",
+    ".mm",
+    ".php",
+    ".proto",
+    ".py",
+    ".pyi",
+    ".rb",
+    ".rs",
+    ".scala",
+    ".sh",
+    ".swift",
+    ".ts",
+    ".tsx",
+    ".zsh",
+}
+NOISE_PATH_PARTS = {
+    ".github",
+    ".idea",
+    ".vscode",
+    "benchmark",
+    "benchmarks",
+    "changelog",
+    "changelogs",
+    "doc",
+    "docs",
+    "documentation",
+    "examples",
+    "licenses",
+    "node_modules",
+    "snapshot",
+    "snapshots",
+    "template",
+    "templates",
+    "vendor",
+}
+NOISE_FILENAMES = {
+    "changelog",
+    "changelog.md",
+    "contributing.md",
+    "license",
+    "license.md",
+    "readme",
+    "readme.md",
+}
 
 
 def evaluate_lexical_baseline(
@@ -22,7 +83,9 @@ def evaluate_lexical_baseline(
     keep_list: Path | None = None,
     limit_samples: int | None = None,
     dry_run: bool = False,
+    candidate_filter: str = "all_files",
 ) -> dict[str, Any]:
+    validate_candidate_filter(candidate_filter)
     manifest = {} if dry_run else load_corpus_manifest(corpus_dir)
     keep_ids = load_keep_ids(keep_list)
     details: list[dict[str, Any]] = []
@@ -47,6 +110,7 @@ def evaluate_lexical_baseline(
                 skipped["missing_corpus"] += 1
                 continue
             chunks = read_jsonl(chunks_path)
+        chunks = filter_candidate_chunks(chunks, candidate_filter)
         if not chunks:
             skipped["empty_corpus"] += 1
             continue
@@ -58,7 +122,9 @@ def evaluate_lexical_baseline(
                 "task_type": sample.get("task_type"),
                 "repo": sample.get("repo"),
                 "base_commit": sample.get("base_commit"),
+                "candidate_filter": candidate_filter,
                 "gold_files": gold_files,
+                "gold_ranks": gold_file_ranks(gold_files, ranked),
                 "top_files": unique_ranked_paths(ranked)[:20],
                 "metrics": metrics,
             }
@@ -68,6 +134,7 @@ def evaluate_lexical_baseline(
     summary = summarize_details(details)
     result = {
         "mode": "dry_run" if dry_run else "corpus",
+        "candidate_filter": candidate_filter,
         "keep_list": str(keep_list) if keep_list and keep_list.exists() else None,
         "evaluated": evaluated,
         "skipped": dict(skipped),
@@ -188,6 +255,67 @@ def sample_metrics(gold_files: list[str], ranked_chunks: list[dict[str, Any]], c
         "gold_coverage@8k": gold_coverage_at_budget(gold, ranked_chunks, context_budget),
     }
     return metrics
+
+
+def gold_file_ranks(gold_files: list[str], ranked_chunks: list[dict[str, Any]]) -> dict[str, int | None]:
+    ranked_paths = unique_ranked_paths(ranked_chunks)
+    ranks = {path: index for index, path in enumerate(ranked_paths, start=1)}
+    return {path: ranks.get(path) for path in gold_files}
+
+
+def filter_candidate_chunks(chunks: list[dict[str, Any]], candidate_filter: str = "all_files") -> list[dict[str, Any]]:
+    validate_candidate_filter(candidate_filter)
+    if candidate_filter == "all_files":
+        return chunks
+    if candidate_filter == "tests_only":
+        return [chunk for chunk in chunks if is_test_path(str(chunk.get("path", "")))]
+    return [chunk for chunk in chunks if is_code_path(str(chunk.get("path", "")))]
+
+
+def validate_candidate_filter(candidate_filter: str) -> None:
+    if candidate_filter not in CANDIDATE_FILTERS:
+        raise ValueError(f"Unknown candidate filter {candidate_filter!r}. Expected one of: {', '.join(CANDIDATE_FILTERS)}")
+
+
+def is_code_path(path: str) -> bool:
+    if not path or is_noise_path(path):
+        return False
+    return Path(path).suffix.lower() in CODE_EXTENSIONS
+
+
+def is_test_path(path: str) -> bool:
+    if not path:
+        return False
+    normalized = path.replace("\\", "/")
+    lowered = normalized.lower()
+    parts = {part.lower() for part in normalized.split("/")}
+    basename = Path(lowered).name
+    in_test_location = bool(parts & {"__tests__", "test", "tests", "testing", "testdata", "testsuite", "testsuites"})
+    test_suffixes = (
+        "_test.go",
+        "_test.py",
+        "_test.rs",
+        "_test.cc",
+        "_test.cpp",
+        ".spec.js",
+        ".spec.jsx",
+        ".spec.ts",
+        ".spec.tsx",
+        ".test.js",
+        ".test.jsx",
+        ".test.ts",
+        ".test.tsx",
+    )
+    test_name = basename.startswith("test_") or basename.endswith(test_suffixes) or basename.endswith(("test.java", "tests.java"))
+    return (in_test_location or test_name) and Path(path).suffix.lower() in CODE_EXTENSIONS
+
+
+def is_noise_path(path: str) -> bool:
+    normalized = path.replace("\\", "/")
+    lowered_parts = [part.lower() for part in normalized.split("/")]
+    basename = Path(normalized).name.lower()
+    stem = Path(normalized).stem.lower()
+    return bool(set(lowered_parts) & NOISE_PATH_PARTS) or basename in NOISE_FILENAMES or stem in NOISE_FILENAMES
 
 
 def recall_at(gold: set[str], ranked_paths: list[str], k: int) -> float:

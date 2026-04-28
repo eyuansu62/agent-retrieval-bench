@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Any, Iterable, Protocol, Sequence, TextIO
 
 from .baseline import (
+    filter_candidate_chunks,
+    gold_file_ranks,
     iter_samples,
     load_corpus_manifest,
     query_has_leakage,
@@ -16,6 +18,7 @@ from .baseline import (
     summarize_details,
     target_gold_files,
     unique_ranked_paths,
+    validate_candidate_filter,
 )
 from .curate import filter_samples, load_keep_ids
 from .io import ensure_parent, read_jsonl, repo_slug
@@ -80,7 +83,9 @@ def evaluate_embedding_baseline(
     embedder: TextEmbedder | None = None,
     progress: bool = False,
     progress_stream: TextIO | None = None,
+    candidate_filter: str = "all_files",
 ) -> dict[str, Any]:
+    validate_candidate_filter(candidate_filter)
     reporter = ProgressReporter(progress, progress_stream)
     reporter.message(f"loading embedding model: {model_name}")
     actual_embedder = embedder or SentenceTransformerEmbedder(
@@ -132,6 +137,7 @@ def evaluate_embedding_baseline(
             chunks = read_jsonl(chunks_path)
             chunk_cache[key] = chunks
             reporter.message(f"loaded chunks: {len(chunks)} from {chunks_path}")
+        chunks = filter_candidate_chunks(chunks, candidate_filter)
         if not chunks:
             skipped["empty_corpus"] += 1
             sample_bar.update(suffix=f"evaluated={evaluated} skipped={sum(skipped.values())}")
@@ -147,6 +153,7 @@ def evaluate_embedding_baseline(
                 batch_size=batch_size,
                 passage_prefix=passage_prefix,
                 normalize_embeddings=normalize_embeddings,
+                candidate_filter=candidate_filter,
                 progress_reporter=reporter,
             )
             vector_cache[key] = vectors
@@ -159,7 +166,9 @@ def evaluate_embedding_baseline(
                 "task_type": sample.get("task_type"),
                 "repo": sample.get("repo"),
                 "base_commit": sample.get("base_commit"),
+                "candidate_filter": candidate_filter,
                 "gold_files": gold_files,
+                "gold_ranks": gold_file_ranks(gold_files, ranked),
                 "top_files": unique_ranked_paths(ranked)[:20],
                 "metrics": metrics,
             }
@@ -172,6 +181,7 @@ def evaluate_embedding_baseline(
     result = {
         "mode": "embedding",
         "model": model_name,
+        "candidate_filter": candidate_filter,
         "cache_dir": str(cache_dir) if cache_dir else None,
         "keep_list": str(keep_list) if keep_list and keep_list.exists() else None,
         "evaluated": evaluated,
@@ -198,6 +208,7 @@ def load_or_encode_chunk_vectors(
     batch_size: int = 32,
     passage_prefix: str = "",
     normalize_embeddings: bool = True,
+    candidate_filter: str = "all_files",
     progress_reporter: "ProgressReporter | None" = None,
 ) -> Any:
     reporter = progress_reporter or ProgressReporter(False)
@@ -214,8 +225,9 @@ def load_or_encode_chunk_vectors(
     repo = str(chunks[0].get("repo", "")) if chunks else "unknown"
     base_commit = str(chunks[0].get("base_commit", "")) if chunks else chunks_path.stem.split(".")[0]
     pair_dir = cache_dir / repo_slug(repo)
-    vectors_path = pair_dir / f"{base_commit}.embeddings.npy"
-    meta_path = pair_dir / f"{base_commit}.embeddings.meta.json"
+    cache_stem = f"{base_commit}.embeddings" if candidate_filter == "all_files" else f"{base_commit}.{candidate_filter}.embeddings"
+    vectors_path = pair_dir / f"{cache_stem}.npy"
+    meta_path = pair_dir / f"{cache_stem}.meta.json"
     if vectors_path.exists() and meta_path.exists():
         meta = json.loads(meta_path.read_text(encoding="utf-8"))
         if (
@@ -224,6 +236,7 @@ def load_or_encode_chunk_vectors(
             and meta.get("chunks_path") == str(chunks_path)
             and meta.get("passage_prefix") == passage_prefix
             and meta.get("normalize_embeddings") == normalize_embeddings
+            and meta.get("candidate_filter", "all_files") == candidate_filter
         ):
             reporter.message(f"embedding cache hit: {vectors_path}")
             return np.load(vectors_path)
@@ -245,6 +258,7 @@ def load_or_encode_chunk_vectors(
                 "embedding_dim": int(vectors.shape[1]) if len(vectors.shape) == 2 else 0,
                 "normalize_embeddings": normalize_embeddings,
                 "passage_prefix": passage_prefix,
+                "candidate_filter": candidate_filter,
             },
             ensure_ascii=False,
             indent=2,
@@ -383,8 +397,13 @@ def model_slug(model_name: str) -> str:
     return slug.strip("-") or "embedding-model"
 
 
-def default_embedding_summary_path(model_name: str, root: Path = Path("data/eval/v0_1")) -> Path:
-    return root / f"{model_slug(model_name)}_summary.json"
+def default_embedding_summary_path(
+    model_name: str,
+    root: Path = Path("data/eval/v0_1"),
+    candidate_filter: str = "all_files",
+) -> Path:
+    suffix = "_summary" if candidate_filter == "all_files" else f"_{candidate_filter}_summary"
+    return root / f"{model_slug(model_name)}{suffix}.json"
 
 
 def default_embedding_cache_dir(model_name: str, root: Path = Path("data/embeddings/v0_1")) -> Path:

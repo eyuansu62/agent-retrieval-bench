@@ -5,8 +5,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from agent_retrieval_bench.baseline import evaluate_lexical_baseline
-from agent_retrieval_bench.cli import default_baseline_details_path
+from agent_retrieval_bench.baseline import evaluate_lexical_baseline, filter_candidate_chunks, gold_file_ranks
+from agent_retrieval_bench.cli import default_baseline_details_path, default_lexical_summary_path
 from agent_retrieval_bench.corpus import build_commit_chunks, chunks_for_file, sample_paths_from_derived
 from agent_retrieval_bench.curate import export_curated_samples
 
@@ -112,13 +112,31 @@ class CorpusBaselineTests(unittest.TestCase):
                 corpus_dir / "corpus_manifest.jsonl",
                 [{"repo": "o/r", "base_commit": "base", "status": "ok", "chunks_path": str(chunks_path)}],
             )
+            details_path = root / "details.jsonl"
 
-            result = evaluate_lexical_baseline([samples], corpus_dir)
+            result = evaluate_lexical_baseline([samples], corpus_dir, details_path=details_path)
+            detail = json.loads(details_path.read_text(encoding="utf-8").splitlines()[0])
 
             self.assertEqual(result["evaluated"], 1)
+            self.assertEqual(result["candidate_filter"], "all_files")
             self.assertEqual(result["skipped"]["query_leakage"], 1)
             self.assertEqual(result["metrics"]["testlog2code"]["Recall@5"], 1.0)
             self.assertEqual(result["metrics"]["testlog2code"]["MRR"], 1.0)
+            self.assertEqual(detail["candidate_filter"], "all_files")
+            self.assertEqual(detail["gold_ranks"], {"src/auth.py": 1})
+
+    def test_candidate_filter_keeps_only_test_files_when_requested(self):
+        chunks = [
+            {"path": "src/auth.py"},
+            {"path": "docs/auth.md"},
+            {"path": "tests/test_auth.py"},
+            {"path": "tests/snapshots/auth.stderr"},
+            {"path": "src/auth.test.ts"},
+        ]
+
+        filtered = filter_candidate_chunks(chunks, "tests_only")
+
+        self.assertEqual([chunk["path"] for chunk in filtered], ["tests/test_auth.py", "src/auth.test.ts"])
 
     def test_curated_export_and_baseline_use_keep_list(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -217,6 +235,15 @@ class CorpusBaselineTests(unittest.TestCase):
             default_baseline_details_path(Path("data/eval/v0_1/lexical_summary.json")),
             Path("data/eval/v0_1/lexical_details.jsonl"),
         )
+
+    def test_filtered_lexical_summary_path_is_distinct(self):
+        self.assertEqual(default_lexical_summary_path("all_files"), Path("data/eval/v0/lexical_summary.json"))
+        self.assertEqual(default_lexical_summary_path("tests_only"), Path("data/eval/v0/lexical_tests_only_summary.json"))
+
+    def test_gold_file_ranks_reports_missing_gold_as_null(self):
+        ranks = gold_file_ranks(["tests/test_auth.py", "tests/test_missing.py"], [{"path": "src/auth.py"}, {"path": "tests/test_auth.py"}])
+
+        self.assertEqual(ranks, {"tests/test_auth.py": 2, "tests/test_missing.py": None})
 
     def _git(self, args, cwd):
         return subprocess.run(["git", *args], cwd=cwd, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
