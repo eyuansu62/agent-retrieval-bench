@@ -21,6 +21,7 @@ from .embedding_eval import (
 from .github_api import GitHubAPI
 from .io import load_targets, read_jsonl, repo_slug
 from .logs import crawl_job_logs
+from .model_report import report_model_leaderboard
 from .quality import validate_samples
 
 
@@ -164,6 +165,11 @@ def main(argv: list[str] | None = None) -> int:
         default="code2test,comment2context,trace2code",
         help="Comma-separated task types to include in the diagnosis.",
     )
+
+    report_models = subparsers.add_parser("report-models", help="Build a Markdown/JSON leaderboard from eval summaries.")
+    report_models.add_argument("--eval-dir", type=Path, default=Path("data/eval/v0_1"))
+    report_models.add_argument("--out", type=Path, default=Path("data/reports/v0_1/model_leaderboard.md"))
+    report_models.add_argument("--json-out", type=Path)
 
     args = parser.parse_args(argv)
     api = GitHubAPI(token=args.token, cache_dir=args.cache_dir)
@@ -316,6 +322,14 @@ def main(argv: list[str] | None = None) -> int:
             details_path=args.details,
             out_dir=args.out,
             tasks=tasks,
+        )
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return 0
+    if args.command == "report-models":
+        result = report_model_leaderboard(
+            eval_dir=args.eval_dir,
+            out_path=args.out,
+            json_out_path=args.json_out,
         )
         print(json.dumps(result, indent=2, ensure_ascii=False))
         return 0

@@ -90,6 +90,14 @@ Embedding evaluation prints progress by default, including model loading, corpus
 
 Use `--candidate-filter tests_only` to isolate `code2test` behavior against test files, or `--candidate-filter code_only` to exclude docs/changelogs/templates from the candidate set. Details JSONL includes `gold_ranks` for each gold file, with `null` when the gold file is not retrieved.
 
+Generate a model leaderboard from all `*_summary.json` files in `data/eval/v0_1/`:
+
+```bash
+arb report-models \
+  --eval-dir data/eval/v0_1 \
+  --out data/reports/v0_1/model_leaderboard.md
+```
+
 Regenerate the diagnostic report:
 
 ```bash
