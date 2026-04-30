@@ -2,29 +2,30 @@
 
 Agent Retrieval Bench is an action-oriented code retrieval benchmark for coding agents. The benchmark evaluates whether a retriever can find the repository files an agent would need for tasks such as mapping implementation changes to tests, resolving review comments, and following stack traces.
 
-The checked-in release is **Benchmark V0.1**: 35 manually curated samples across `code2test`, `comment2context`, and `trace2code`. This repository is intended to be used as a benchmark/evaluation repo; raw crawling and dataset-construction workflows are intentionally not documented as the public path.
+The current public release is **Benchmark V0.2**: 62 manually curated samples across `code2test`, `comment2context`, and `trace2code`. This repository is intended to be used as a benchmark/evaluation repo; raw crawling and dataset-construction workflows are intentionally not documented as the public path.
 
-## V0.1 Contents
+## V0.2 Contents
 
 ```text
-data/benchmark/v0_1/
+data/benchmark/v0_2/
   manifest.json
   samples.jsonl
   code2test.jsonl
   comment2context.jsonl
   trace2code.jsonl
-data/eval/v0_1/
+data/corpus/v0_2/
+  corpus_manifest.jsonl
+  **/*.chunks.jsonl
+data/eval/v0_2/
   lexical_summary.json
   lexical_details.jsonl
-data/reports/v0_1/
-  report.md
-  diagnostic_summary.json
-  sample_diagnostics.jsonl
+data/audit/v0_2/
+  keep_samples.jsonl
 ```
 
-V0.1 intentionally excludes `testlog2code`: the audited cleaned slice had only 7 valid samples out of 44, so it is not reliable enough for this release.
+V0.2 intentionally excludes `testlog2code`: the audited cleaned slice had only 7 valid samples out of 44, so it is not reliable enough for this release. V0.2 upgrades `comment2context` to score only extra required context files instead of the commented file itself.
 
-The prebuilt V0.1 corpus is hosted on Hugging Face Datasets:
+The prebuilt V0.2 samples and corpus are hosted on Hugging Face Datasets:
 
 ```text
 https://huggingface.co/datasets/eyuansu71/agent_retrieval_bench
@@ -46,33 +47,37 @@ Install optional embedding dependencies only when running embedding model evalua
 pip install -e ".[embedding]"
 ```
 
-No GitHub API token is required to inspect the checked-in V0.1 benchmark, validate samples, or read the published baseline and diagnostic report.
+No GitHub API token is required to download, inspect, validate, or evaluate the public V0.2 benchmark.
 
-## Evaluate V0.1
+## Evaluate V0.2
 
-Validate the checked-in benchmark samples:
-
-```bash
-arb validate data/benchmark/v0_1/*.jsonl
-```
-
-The candidate corpus is not committed to GitHub because it is large. Download the prebuilt V0.1 corpus from Hugging Face into the repo-local `data/` directory:
+Download the prebuilt V0.2 benchmark and candidate corpus from Hugging Face into the repo-local `data/` directory:
 
 ```bash
 hf download eyuansu71/agent_retrieval_bench \
-  --type dataset \
+  --repo-type dataset \
   --local-dir data \
-  --include "corpus/v0_1/**"
+  --include "benchmark/v0_2/**" \
+  --include "corpus/v0_2/**" \
+  --include "eval/v0_2/**" \
+  --include "audit/v0_2/**" \
+  --include "audit/v0_2_round3_more/summary.json"
+```
+
+Validate the benchmark samples:
+
+```bash
+arb validate data/benchmark/v0_2/*.jsonl
 ```
 
 Run the lexical/exact retrieval baseline:
 
 ```bash
 arb eval-baseline \
-  --derived data/benchmark/v0_1 \
-  --keep-list data/audit/v0_clean/keep_samples.jsonl \
-  --corpus data/corpus/v0_1 \
-  --out data/eval/v0_1/lexical_summary.json
+  --derived data/benchmark/v0_2 \
+  --keep-list data/audit/v0_2/keep_samples.jsonl \
+  --corpus data/corpus/v0_2 \
+  --out data/eval/v0_2/lexical_summary.json
 ```
 
 Run an embedding model evaluation:
@@ -80,46 +85,48 @@ Run an embedding model evaluation:
 ```bash
 arb eval-embedding \
   --model jinaai/jina-code-embeddings-0.5b \
-  --derived data/benchmark/v0_1 \
-  --keep-list data/audit/v0_clean/keep_samples.jsonl \
-  --corpus data/corpus/v0_1 \
-  --candidate-filter all_files
+  --derived data/benchmark/v0_2 \
+  --keep-list data/audit/v0_2/keep_samples.jsonl \
+  --corpus data/corpus/v0_2 \
+  --candidate-filter code_only \
+  --out data/eval/v0_2/jina-code-embeddings-0.5b_code_only_summary.json
 ```
 
-Embedding evaluation prints progress by default, including model loading, corpus loading, cache hits/misses, chunk encoding, and sample evaluation. Use `--no-progress` for quiet runs. The first run for a model can be slow because it embeds full base-commit corpora; later runs reuse `data/embeddings/v0_1/`.
+Embedding evaluation prints progress by default, including model loading, corpus loading, cache hits/misses, chunk encoding, and sample evaluation. Use `--no-progress` for quiet runs. The first run for a model can be slow because it embeds full base-commit corpora; later runs reuse `data/embeddings/v0_2/`.
 
 Use `--candidate-filter tests_only` to isolate `code2test` behavior against test files, or `--candidate-filter code_only` to exclude docs/changelogs/templates from the candidate set. Details JSONL includes `gold_ranks` for each gold file, with `null` when the gold file is not retrieved.
 
-Generate a model leaderboard from all `*_summary.json` files in `data/eval/v0_1/`:
+Generate a model leaderboard from all `*_summary.json` files in `data/eval/v0_2/`:
 
 ```bash
 arb report-models \
-  --eval-dir data/eval/v0_1 \
-  --out data/reports/v0_1/model_leaderboard.md
+  --eval-dir data/eval/v0_2 \
+  --out data/reports/v0_2/model_leaderboard.md \
+  --json-out data/reports/v0_2/model_leaderboard.json
 ```
 
 Regenerate the diagnostic report:
 
 ```bash
 arb diagnose \
-  --samples data/benchmark/v0_1/samples.jsonl \
-  --corpus-manifest data/corpus/v0_1/corpus_manifest.jsonl \
-  --details data/eval/v0_1/lexical_details.jsonl \
-  --out data/reports/v0_1
+  --samples data/benchmark/v0_2/samples.jsonl \
+  --corpus-manifest data/corpus/v0_2/corpus_manifest.jsonl \
+  --details data/eval/v0_2/lexical_details.jsonl \
+  --out data/reports/v0_2
 ```
 
 ## Current Lexical Baseline
 
-The checked-in V0.1 lexical baseline evaluates all 35 samples with no skipped samples.
+The published V0.2 lexical baseline evaluates all 62 samples with no skipped samples.
 
 | Task | Samples | Recall@5 | Recall@10 | Recall@20 | MRR | gold_coverage@8k |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | `code2test` | 17 | 0.2353 | 0.2941 | 0.3676 | 0.1418 | 0.1176 |
-| `comment2context` | 16 | 1.0000 | 1.0000 | 1.0000 | 0.9688 | 1.0000 |
+| `comment2context` | 43 | 0.4535 | 0.6512 | 0.8721 | 0.2482 | 0.1512 |
 | `trace2code` | 2 | 1.0000 | 1.0000 | 1.0000 | 0.7500 | 1.0000 |
-| `overall` | 35 | 0.6286 | 0.6571 | 0.6929 | 0.5546 | 0.5714 |
+| `overall` | 62 | 0.4113 | 0.5645 | 0.7379 | 0.2352 | 0.1694 |
 
-See `data/reports/v0_1/report.md` for the V0.1 diagnostic report. The main takeaway is that `code2test` is the useful hard slice, while `comment2context` and `trace2code` are currently closer to smoke/easy checks because many queries contain direct path hints or have too few samples.
+V0.1 remains available as a legacy 35-sample artifact under `data/benchmark/v0_1/`. New model comparisons should report V0.2 as the primary benchmark.
 
 ## Benchmark Semantics
 
