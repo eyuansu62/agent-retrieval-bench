@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from agent_retrieval_bench.baseline import evaluate_lexical_baseline, filter_candidate_chunks, gold_file_ranks
+from agent_retrieval_bench.baseline import evaluate_lexical_baseline, filter_candidate_chunks, gold_file_ranks, target_gold_files
 from agent_retrieval_bench.cli import default_baseline_details_path, default_lexical_summary_path
 from agent_retrieval_bench.corpus import build_commit_chunks, chunks_for_file, sample_paths_from_derived
 from agent_retrieval_bench.curate import export_curated_samples
@@ -137,6 +137,21 @@ class CorpusBaselineTests(unittest.TestCase):
         filtered = filter_candidate_chunks(chunks, "tests_only")
 
         self.assertEqual([chunk["path"] for chunk in filtered], ["tests/test_auth.py", "src/auth.test.ts"])
+
+    def test_comment2context_targets_extra_context_not_given_file(self):
+        sample = {
+            "task_type": "comment2context",
+            "query": {"path": "src/auth.py"},
+            "gold": {
+                "given_files": ["src/auth.py"],
+                "must_context_files": [
+                    {"path": "tests/test_auth.py", "evidence": ["modified_after_review_comment"]},
+                ],
+                "root_cause_files": ["src/auth.py"],
+            },
+        }
+
+        self.assertEqual(target_gold_files(sample), ["tests/test_auth.py"])
 
     def test_curated_export_and_baseline_use_keep_list(self):
         with tempfile.TemporaryDirectory() as tmp:

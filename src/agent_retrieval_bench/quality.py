@@ -24,6 +24,11 @@ def validate_sample(sample: dict[str, Any]) -> list[str]:
     if corpus.get("base_commit") != sample.get("base_commit"):
         errors.append("candidate_corpus base_commit mismatch")
     gold = sample.get("gold") or {}
+    if sample.get("task_type") == "comment2context" and sample.get("version", 1) >= 2:
+        if not _gold_paths(gold.get("given_files") or []):
+            errors.append("comment2context missing given_files")
+        if not _gold_paths(gold.get("must_context_files") or gold.get("context_files") or []):
+            errors.append("comment2context missing must_context_files")
     if not gold.get("root_cause_files") and sample.get("task_type") != "code2test":
         errors.append("missing root_cause_files")
     if sample.get("task_type") == "code2test" and not gold.get("related_tests"):
@@ -35,6 +40,16 @@ def validate_sample(sample: dict[str, Any]) -> list[str]:
     if fix_commit and fix_commit in query_text:
         errors.append("query contains fix commit")
     return errors
+
+
+def _gold_paths(values: list[Any]) -> list[str]:
+    paths: list[str] = []
+    for value in values:
+        if isinstance(value, str):
+            paths.append(value)
+        elif isinstance(value, dict) and value.get("path"):
+            paths.append(str(value["path"]))
+    return paths
 
 
 def validate_samples(path: Path) -> dict[str, Any]:

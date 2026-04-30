@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from agent_retrieval_bench.diagnostics import bucket_sample, diagnose_benchmark, query_gold_hints
+from agent_retrieval_bench.diagnostics import bucket_sample, diagnose_benchmark, file_ranks, query_gold_hints
 
 
 def write_jsonl(path, rows):
@@ -22,6 +22,12 @@ class DiagnosticsTests(unittest.TestCase):
         self.assertEqual(path_hints["gold_path_hits"], ["tests/test_auth.py"])
         self.assertTrue(basename_hints["has_gold_basename_hint"])
         self.assertEqual(basename_hints["gold_basename_hits"], ["tests/test_auth.py"])
+
+    def test_file_ranks_reports_given_and_context_positions(self):
+        self.assertEqual(
+            file_ranks(["src/auth.py", "tests/test_auth.py"], ["tests/test_auth.py", "src/auth.py"]),
+            {"src/auth.py": 2, "tests/test_auth.py": 1},
+        )
 
     def test_bucket_sample_classifies_quality_slices(self):
         hint = {"has_gold_path_hint": True, "has_gold_basename_hint": False}
@@ -68,8 +74,13 @@ class DiagnosticsTests(unittest.TestCase):
                         "task_type": "comment2context",
                         "repo": "o/r",
                         "base_commit": "base2",
-                        "query": {"comment": "auth regression"},
-                        "gold": {"root_cause_files": ["src/auth.py"]},
+                        "version": 2,
+                        "query": {"comment": "auth regression", "path": "src/auth.py"},
+                        "gold": {
+                            "given_files": ["src/auth.py"],
+                            "must_context_files": [{"path": "tests/test_auth.py", "evidence": ["human_verified_required"]}],
+                            "root_cause_files": ["tests/test_auth.py"],
+                        },
                     },
                     {
                         "id": "excluded-log",
@@ -107,8 +118,9 @@ class DiagnosticsTests(unittest.TestCase):
                         "task_type": "comment2context",
                         "repo": "o/r",
                         "base_commit": "base2",
-                        "gold_files": ["src/auth.py"],
-                        "top_files": ["src/auth.py"],
+                        "gold_files": ["tests/test_auth.py"],
+                        "gold_ranks": {"tests/test_auth.py": 1},
+                        "top_files": ["src/auth.py", "tests/test_auth.py"],
                         "metrics": {"Recall@5": 1, "Recall@10": 1, "Recall@20": 1, "MRR": 1, "gold_coverage@8k": 1},
                     },
                     {
@@ -129,7 +141,13 @@ class DiagnosticsTests(unittest.TestCase):
                     {"repo": "o/r", "base_commit": "base", "path": "src/missing.py", "kind": "file"},
                 ],
             )
-            write_jsonl(chunks_b, [{"repo": "o/r", "base_commit": "base2", "path": "src/auth.py", "kind": "file"}])
+            write_jsonl(
+                chunks_b,
+                [
+                    {"repo": "o/r", "base_commit": "base2", "path": "src/auth.py", "kind": "file"},
+                    {"repo": "o/r", "base_commit": "base2", "path": "tests/test_auth.py", "kind": "file"},
+                ],
+            )
             write_jsonl(
                 corpus_manifest_path,
                 [
@@ -157,6 +175,9 @@ class DiagnosticsTests(unittest.TestCase):
             self.assertEqual(summary["buckets"]["too_easy_direct_hint"], 1)
             self.assertEqual(summary["buckets"]["invalid_missing_gold"], 1)
             self.assertEqual({row["sample_id"] for row in diagnostics}, {"hinted", "missing", "easy"})
+            easy = next(row for row in diagnostics if row["sample_id"] == "easy")
+            self.assertEqual(easy["given_file_ranks"], {"src/auth.py": 1})
+            self.assertEqual(easy["context_gold_ranks"], {"tests/test_auth.py": 1})
             self.assertIn("V0.2 Decisions", report)
             self.assertTrue((out_dir / "report.md").exists())
 

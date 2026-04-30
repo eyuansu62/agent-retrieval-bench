@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from agent_retrieval_bench.audit import AUDIT_FIELDS, build_audit_rows, summarize_audit, write_audit_sample
+from agent_retrieval_bench.audit import AUDIT_FIELDS, build_audit_rows, gold_files_for_task, summarize_audit, write_audit_sample
 
 
 def sample(sample_id, task_type, repo, query=None, gold=None):
@@ -52,6 +52,20 @@ class AuditTests(unittest.TestCase):
             self.assertEqual(first, second)
             self.assertEqual(len(first), 2)
             self.assertEqual(tuple(first[0].keys()), AUDIT_FIELDS)
+
+    def test_comment2context_audit_gold_uses_must_context_files(self):
+        row = sample(
+            "c1",
+            "comment2context",
+            "o/r",
+            gold={
+                "given_files": ["src/auth.py"],
+                "must_context_files": [{"path": "tests/test_auth.py", "evidence": ["human_verified_required"]}],
+                "root_cause_files": ["src/auth.py"],
+            },
+        )
+
+        self.assertEqual(gold_files_for_task(row), ["tests/test_auth.py"])
 
     def test_audit_outputs_jsonl_csv_and_removes_patch_leakage(self):
         with tempfile.TemporaryDirectory() as tmp:

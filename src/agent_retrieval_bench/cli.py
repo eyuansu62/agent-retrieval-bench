@@ -10,7 +10,7 @@ from .baseline import CANDIDATE_FILTERS, evaluate_lexical_baseline
 from .clone import verify_base_commits
 from .corpus import build_candidate_corpus, sample_paths_from_derived
 from .curate import export_curated_samples
-from .crawler import crawl_repo, write_manifest
+from .crawler import crawl_commit_details_for_raw, crawl_repo, write_manifest
 from .derive import derive_repo
 from .diagnostics import diagnose_benchmark
 from .embedding_eval import (
@@ -96,6 +96,12 @@ def main(argv: list[str] | None = None) -> int:
         default="failure,timed_out,action_required",
         help="Comma-separated check conclusions to download.",
     )
+
+    commit_details = subparsers.add_parser("crawl-commit-details", help="Fetch commit changed-file details for crawled PR commits.")
+    commit_details.add_argument("--raw", type=Path, default=Path("data/raw"))
+    commit_details.add_argument("--repo", action="append", help="Repo to process. Defaults to raw dirs.")
+    commit_details.add_argument("--limit-prs", type=int)
+    commit_details.add_argument("--max-commits-per-pr", type=int)
 
     verify = subparsers.add_parser("verify-bases", help="Fetch and verify base commits in bare repo caches.")
     verify.add_argument("--raw", type=Path, default=Path("data/raw"))
@@ -244,6 +250,20 @@ def main(argv: list[str] | None = None) -> int:
         conclusions = {item.strip() for item in args.conclusions.split(",") if item.strip()}
         result = [
             crawl_job_logs(api, args.raw, repo, max_jobs=args.max_jobs, max_bytes=args.max_bytes, conclusions=conclusions)
+            for repo in repos
+        ]
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return 1 if any(item["errors"] for item in result) else 0
+    if args.command == "crawl-commit-details":
+        repos = args.repo or _repos_from_raw(args.raw)
+        result = [
+            crawl_commit_details_for_raw(
+                api,
+                args.raw,
+                repo,
+                limit_prs=args.limit_prs,
+                max_commits_per_pr=args.max_commits_per_pr,
+            )
             for repo in repos
         ]
         print(json.dumps(result, indent=2, ensure_ascii=False))

@@ -5,7 +5,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any, Iterable
 
-from .baseline import average_metrics, query_text_for_eval, target_gold_files
+from .baseline import average_metrics, given_files, query_text_for_eval, target_gold_files
 from .io import ensure_parent, read_jsonl, utc_now
 
 METRIC_KEYS = ("Recall@5", "Recall@10", "Recall@20", "MRR", "gold_coverage@8k")
@@ -41,25 +41,30 @@ def diagnose_benchmark(
         base_commit = str(sample.get("base_commit", ""))
         task_type = str(sample.get("task_type", ""))
         gold_files = target_gold_files(sample)
+        known_given_files = given_files(sample) if task_type == "comment2context" else []
         corpus_paths = paths_for_pair(repo, base_commit, corpus_by_pair, path_cache)
         missing_gold = [path for path in gold_files if path not in corpus_paths]
         hints = query_gold_hints(query_text_for_eval(sample), gold_files)
         metrics = metrics_for_detail(detail)
         bucket = bucket_sample(metrics, hints, missing_gold)
+        top_files = list(detail.get("top_files") or [])[:20]
         diagnostics.append(
             {
                 "sample_id": sample_id,
                 "task_type": task_type,
                 "repo": repo,
                 "base_commit": base_commit,
+                "given_files": known_given_files,
+                "given_file_ranks": file_ranks(known_given_files, top_files),
                 "gold_files": gold_files,
+                "context_gold_ranks": detail.get("gold_ranks") or file_ranks(gold_files, top_files),
                 "gold_in_corpus": not missing_gold,
                 "missing_gold_files": missing_gold,
                 "query_hints": hints,
                 "metrics": metrics,
                 "bucket": bucket,
                 "recommendation": recommendation_for_sample(task_type, bucket, hints, missing_gold),
-                "top_files": list(detail.get("top_files") or [])[:20],
+                "top_files": top_files,
                 "pr_url": ((sample.get("metadata") or {}).get("pr_url") or ""),
             }
         )
@@ -99,6 +104,11 @@ def query_gold_hints(query_text: str, gold_files: list[str]) -> dict[str, Any]:
         "gold_path_hits": full_path_hits,
         "gold_basename_hits": basename_hits,
     }
+
+
+def file_ranks(paths: list[str], top_files: list[str]) -> dict[str, int | None]:
+    ranks = {path: index for index, path in enumerate(top_files, start=1)}
+    return {path: ranks.get(path) for path in paths}
 
 
 def bucket_sample(metrics: dict[str, float], hints: dict[str, Any], missing_gold: list[str]) -> str:
@@ -214,7 +224,10 @@ def failure_samples(diagnostics: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "repo": item["repo"],
             "Recall@20": item["metrics"].get("Recall@20", 0.0),
             "MRR": item["metrics"].get("MRR", 0.0),
+            "given_files": item["given_files"],
+            "given_file_ranks": item["given_file_ranks"],
             "gold_files": item["gold_files"],
+            "context_gold_ranks": item["context_gold_ranks"],
             "top_files": item["top_files"][:5],
             "bucket": item["bucket"],
             "recommendation": item["recommendation"],
@@ -276,7 +289,7 @@ def metrics_for_detail(detail: dict[str, Any]) -> dict[str, float]:
 
 def render_markdown_report(summary: dict[str, Any], diagnostics: list[dict[str, Any]]) -> str:
     lines = [
-        "# Benchmark V0.1 Diagnostic Report",
+        "# Benchmark Diagnostic Report",
         "",
         f"Generated at: `{summary['generated_at']}`",
         "",
@@ -314,8 +327,8 @@ def render_markdown_report(summary: dict[str, Any], diagnostics: list[dict[str, 
             "",
             f"- Gold fully present in corpus: `{gold['samples_with_all_gold']}/{summary['samples']}`.",
             f"- Samples with missing gold files: `{gold['samples_with_missing_gold']}`.",
-            f"- Samples with direct gold path hint in query: `{hints['samples_with_gold_path_hint']}`.",
-            f"- Samples with direct gold basename hint in query: `{hints['samples_with_gold_basename_hint']}`.",
+            f"- Samples with direct context-gold path hint in query: `{hints['samples_with_gold_path_hint']}`.",
+            f"- Samples with direct context-gold basename hint in query: `{hints['samples_with_gold_basename_hint']}`.",
             "",
             "## Hard/Easy Buckets",
             "",
@@ -346,8 +359,8 @@ def render_markdown_report(summary: dict[str, Any], diagnostics: list[dict[str, 
             "",
             "## Failure Samples",
             "",
-            "| Sample | Task | Repo | Recall@20 | MRR | Bucket | Recommendation | Gold | Top 5 |",
-            "| --- | --- | --- | ---: | ---: | --- | --- | --- | --- |",
+            "| Sample | Task | Repo | Recall@20 | MRR | Bucket | Recommendation | Given | Gold | Top 5 |",
+            "| --- | --- | --- | ---: | ---: | --- | --- | --- | --- | --- |",
         ]
     )
     for item in summary["failure_samples"][:30]:
@@ -362,6 +375,7 @@ def render_markdown_report(summary: dict[str, Any], diagnostics: list[dict[str, 
                     f"{item['MRR']:.4f}",
                     f"`{item['bucket']}`",
                     f"`{item['recommendation']}`",
+                    markdown_list(item.get("given_files") or []),
                     markdown_list(item["gold_files"]),
                     markdown_list(item["top_files"]),
                 ]
@@ -375,7 +389,7 @@ def render_markdown_report(summary: dict[str, Any], diagnostics: list[dict[str, 
             "## V0.2 Decisions",
             "",
             "- Prioritize expanding and auditing `code2test`; it is the only V0.1 slice with enough hard lexical misses.",
-            "- Keep `comment2context`, but report direct-hint and no-hint subsets separately to avoid ceiling-effect metrics.",
+            "- Upgrade `comment2context` so the commented file is treated as `given_files` and only extra required context is scored.",
             "- Keep `trace2code` as a smoke slice until the validated count is large enough for stable metrics.",
             "- Do not add `testlog2code` to V0.2 until the cleaned audit valid rate reaches at least 50%.",
             "",

@@ -125,6 +125,8 @@ See `data/reports/v0_1/report.md` for the V0.1 diagnostic report. The main takea
 
 - Every sample is evaluated against `repo_at_base_commit`; fixed code must not be indexed.
 - `code2test` gold files are related tests.
-- `comment2context` and `trace2code` gold files are root-cause files when available, otherwise related tests.
+- V0.1 `comment2context` gold files are root-cause files when available, otherwise related tests.
+- V0.2+ `comment2context` treats the commented file as `gold.given_files` and scores only extra required context from `gold.must_context_files` / `gold.context_files`.
+- `trace2code` gold files are root-cause files when available, otherwise related tests.
 - Baseline queries fail closed if raw patch markers or fix commit hashes appear in the query.
 - Large generated artifacts such as `data/repos/` and `data/corpus/` are local evaluation caches and are ignored by git.

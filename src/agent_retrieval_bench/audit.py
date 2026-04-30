@@ -152,7 +152,21 @@ def gold_files_for_task(sample: dict[str, Any]) -> list[str]:
     gold = sample.get("gold") or {}
     if sample.get("task_type") == "code2test":
         return _dedupe(gold.get("related_tests") or [])
+    if sample.get("task_type") == "comment2context":
+        context_files = _gold_paths(gold.get("must_context_files") or gold.get("context_files") or [])
+        if context_files:
+            return context_files
     return _dedupe((gold.get("root_cause_files") or []) + (gold.get("related_tests") or []))
+
+
+def _gold_paths(values: list[Any]) -> list[str]:
+    paths: list[str] = []
+    for value in values:
+        if isinstance(value, str):
+            paths.append(value)
+        elif isinstance(value, dict) and value.get("path"):
+            paths.append(str(value["path"]))
+    return _dedupe(paths)
 
 
 def has_query_leakage(sample: dict[str, Any]) -> bool:

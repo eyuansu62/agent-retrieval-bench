@@ -5,7 +5,7 @@ from typing import Any
 
 from .filters import should_skip_pr, split_changed_files
 from .github_api import GitHubAPI
-from .io import append_jsonl, read_json, repo_slug, utc_now, write_json
+from .io import append_jsonl, read_json, read_jsonl, repo_slug, utc_now, write_json
 
 MERGED_PR_QUERY = """
 query MergedPullRequests($owner: String!, $name: String!, $cursor: String, $pageSize: Int!) {
@@ -132,6 +132,8 @@ def crawl_repo(
         append_jsonl(repo_dir / "review_comments.jsonl", [{**common, "type": "review_comments", "data": comments}])
         commits = api.paginate(f"/repos/{owner}/{name}/pulls/{pr_number}/commits")
         append_jsonl(repo_dir / "pull_commits.jsonl", [{**common, "type": "pull_commits", "data": commits}])
+        commit_details = fetch_commit_details(api, repo, commits)
+        append_jsonl(repo_dir / "commit_details.jsonl", [{**common, "type": "commit_details", "data": commit_details}])
         if include_checks:
             check_records = fetch_check_runs(api, repo, pr, pr_number)
             append_jsonl(repo_dir / "check_runs.jsonl", check_records)
@@ -303,3 +305,98 @@ def fetch_check_runs(api: GitHubAPI, repo: str, pr: dict[str, Any], pr_number: i
                 }
             )
     return records
+
+
+def fetch_commit_details(api: GitHubAPI, repo: str, commits: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    owner, name = repo.split("/", 1)
+    details: list[dict[str, Any]] = []
+    for commit in commits:
+        sha = commit.get("sha")
+        if not sha:
+            continue
+        try:
+            response = api.get(f"/repos/{owner}/{name}/commits/{sha}")
+            data = response.body if isinstance(response.body, dict) else {}
+            details.append(
+                {
+                    "sha": sha,
+                    "commit": data.get("commit") or commit.get("commit") or {},
+                    "files": [
+                        {
+                            "filename": file.get("filename"),
+                            "status": file.get("status"),
+                            "additions": file.get("additions"),
+                            "deletions": file.get("deletions"),
+                            "changes": file.get("changes"),
+                        }
+                        for file in data.get("files", [])
+                        if file.get("filename")
+                    ],
+                }
+            )
+        except RuntimeError as error:
+            details.append({"sha": sha, "error": str(error), "commit": commit.get("commit") or {}, "files": []})
+    return details
+
+
+def crawl_commit_details_for_raw(
+    api: GitHubAPI,
+    raw_dir: Path,
+    repo: str,
+    limit_prs: int | None = None,
+    max_commits_per_pr: int | None = None,
+) -> dict[str, Any]:
+    slug = repo_slug(repo)
+    repo_dir = raw_dir / slug
+    pull_commits_path = repo_dir / "pull_commits.jsonl"
+    commit_details_path = repo_dir / "commit_details.jsonl"
+    existing_prs = {
+        int(record["pr_number"])
+        for record in read_jsonl(commit_details_path)
+        if record.get("pr_number") is not None and record.get("type") == "commit_details"
+    }
+    latest_pull_commits: dict[int, dict[str, Any]] = {}
+    for record in read_jsonl(pull_commits_path):
+        if record.get("pr_number") is not None:
+            latest_pull_commits[int(record["pr_number"])] = record
+
+    fetched = 0
+    skipped_existing = 0
+    skipped_empty = 0
+    errors = 0
+    for pr_number, record in sorted(latest_pull_commits.items(), reverse=True):
+        if limit_prs is not None and fetched >= limit_prs:
+            break
+        if pr_number in existing_prs:
+            skipped_existing += 1
+            continue
+        commits = list(record.get("data") or [])
+        if max_commits_per_pr is not None:
+            commits = commits[:max_commits_per_pr]
+        if not commits:
+            skipped_empty += 1
+            continue
+        details = fetch_commit_details(api, repo, commits)
+        errors += sum(1 for detail in details if detail.get("error"))
+        append_jsonl(
+            commit_details_path,
+            [
+                {
+                    "repo": repo,
+                    "pr_number": pr_number,
+                    "fetched_at": utc_now(),
+                    "type": "commit_details",
+                    "data": details,
+                }
+            ],
+        )
+        fetched += 1
+    return {
+        "repo": repo,
+        "raw_dir": str(repo_dir),
+        "fetched_prs": fetched,
+        "skipped_existing": skipped_existing,
+        "skipped_empty": skipped_empty,
+        "errors": errors,
+        "authenticated": api.authenticated,
+    }

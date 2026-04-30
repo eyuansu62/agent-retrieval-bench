@@ -170,8 +170,31 @@ def target_gold_files(sample: dict[str, Any]) -> list[str]:
     gold = sample.get("gold") or {}
     if sample.get("task_type") == "code2test":
         return _dedupe(gold.get("related_tests") or [])
+    if sample.get("task_type") == "comment2context":
+        context_files = _gold_paths(gold.get("must_context_files") or gold.get("context_files") or [])
+        if context_files:
+            return context_files
     root_files = _dedupe(gold.get("root_cause_files") or [])
     return root_files or _dedupe(gold.get("related_tests") or [])
+
+
+def given_files(sample: dict[str, Any]) -> list[str]:
+    gold = sample.get("gold") or {}
+    query = sample.get("query") or {}
+    values = gold.get("given_files") or []
+    if not values and sample.get("task_type") == "comment2context":
+        values = [query.get("given_file") or query.get("path")]
+    return _dedupe(str(value) for value in values if value)
+
+
+def _gold_paths(values: Iterable[Any]) -> list[str]:
+    paths: list[str] = []
+    for value in values:
+        if isinstance(value, str):
+            paths.append(value)
+        elif isinstance(value, dict) and value.get("path"):
+            paths.append(str(value["path"]))
+    return _dedupe(paths)
 
 
 def query_text_for_eval(sample: dict[str, Any]) -> str:
@@ -191,6 +214,9 @@ def synthetic_chunks(sample: dict[str, Any]) -> list[dict[str, Any]]:
         + (gold.get("related_tests") or [])
         + (gold.get("supporting_files") or [])
         + (gold.get("negative_distractors") or [])
+        + _gold_paths(gold.get("must_context_files") or [])
+        + _gold_paths(gold.get("context_files") or [])
+        + (gold.get("given_files") or [])
     )
     chunks: list[dict[str, Any]] = []
     for path in paths:
