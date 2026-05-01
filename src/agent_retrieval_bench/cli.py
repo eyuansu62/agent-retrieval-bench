@@ -19,6 +19,7 @@ from .embedding_eval import (
     evaluate_embedding_baseline,
 )
 from .github_api import GitHubAPI
+from .hardness import diagnose_hardness, filter_hard_pool
 from .io import load_targets, read_jsonl, repo_slug
 from .logs import crawl_job_logs
 from .model_report import report_model_leaderboard
@@ -171,6 +172,33 @@ def main(argv: list[str] | None = None) -> int:
         default="code2test,comment2context,trace2code",
         help="Comma-separated task types to include in the diagnosis.",
     )
+
+    hardness = subparsers.add_parser("hardness", help="Diagnose hard/easy samples and build a V1 candidate pool.")
+    hardness.add_argument("samples", nargs="*", type=Path, help="Sample JSONL files. Defaults to --derived/*.jsonl.")
+    hardness.add_argument("--derived", type=Path, default=Path("data/benchmark/v0_2"))
+    hardness.add_argument("--corpus-manifest", type=Path, default=Path("data/corpus/v0_2/corpus_manifest.jsonl"))
+    hardness.add_argument("--details", type=Path, default=Path("data/eval/v0_2/lexical_details.jsonl"))
+    hardness.add_argument("--out", type=Path, default=Path("data/reports/v0_2"))
+    hardness.add_argument("--pool-out", type=Path)
+    hardness.add_argument("--keep-list", type=Path)
+    hardness.add_argument(
+        "--tasks",
+        default="code2test,comment2context,trace2code",
+        help="Comma-separated task types to include in the hardness report.",
+    )
+    hardness.add_argument("--hard-recall20-threshold", type=float, default=1.0)
+    hardness.add_argument("--hard-mrr-threshold", type=float, default=0.25)
+
+    hard_pool_filter = subparsers.add_parser("hard-pool-filter", help="Filter hardness candidates into a V1 seed pool.")
+    hard_pool_filter.add_argument("--pool", type=Path, default=Path("data/reports/v0_2/candidate_keep_pool.jsonl"))
+    hard_pool_filter.add_argument("--audit", type=Path, help="Optional manual audit JSONL/CSV for candidate verdicts.")
+    hard_pool_filter.add_argument("--out", type=Path, default=Path("data/reports/v0_2/v1_seed_candidates.jsonl"))
+    hard_pool_filter.add_argument("--summary", type=Path, default=Path("data/reports/v0_2/v1_seed_summary.json"))
+    hard_pool_filter.add_argument("--audit-out", type=Path, default=Path("data/reports/v0_2/v1_seed_audit_samples.jsonl"))
+    hard_pool_filter.add_argument("--audit-csv", type=Path, default=Path("data/reports/v0_2/v1_seed_audit_samples.csv"))
+    hard_pool_filter.add_argument("--audit-limit", type=int, default=120)
+    hard_pool_filter.add_argument("--min-score", type=float, default=0.0)
+    hard_pool_filter.add_argument("--no-unaudited", action="store_true", help="Only keep manually audited valid candidates.")
 
     report_models = subparsers.add_parser("report-models", help="Build a Markdown/JSON leaderboard from eval summaries.")
     report_models.add_argument("--eval-dir", type=Path, default=Path("data/eval/v0_1"))
@@ -342,6 +370,36 @@ def main(argv: list[str] | None = None) -> int:
             details_path=args.details,
             out_dir=args.out,
             tasks=tasks,
+        )
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return 0
+    if args.command == "hardness":
+        tasks = [task.strip() for task in args.tasks.split(",") if task.strip()]
+        sample_paths = args.samples or sample_paths_from_derived(args.derived)
+        result = diagnose_hardness(
+            sample_paths=sample_paths,
+            corpus_manifest_path=args.corpus_manifest,
+            details_path=args.details,
+            out_dir=args.out,
+            pool_out_path=args.pool_out,
+            keep_list=args.keep_list,
+            tasks=tasks,
+            hard_recall20_threshold=args.hard_recall20_threshold,
+            hard_mrr_threshold=args.hard_mrr_threshold,
+        )
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return 0
+    if args.command == "hard-pool-filter":
+        result = filter_hard_pool(
+            pool_path=args.pool,
+            out_path=args.out,
+            summary_path=args.summary,
+            audit_path=args.audit,
+            audit_out_path=args.audit_out,
+            audit_csv_path=args.audit_csv,
+            audit_limit=args.audit_limit,
+            min_score=args.min_score,
+            include_unaudited=not args.no_unaudited,
         )
         print(json.dumps(result, indent=2, ensure_ascii=False))
         return 0

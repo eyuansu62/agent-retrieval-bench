@@ -115,6 +115,34 @@ arb diagnose \
   --out data/reports/v0_2
 ```
 
+Generate a V1 hard-mining report and candidate pool:
+
+```bash
+arb hardness \
+  --derived data/benchmark/v0_2 \
+  --corpus-manifest data/corpus/v0_2/corpus_manifest.jsonl \
+  --details data/eval/v0_2/lexical_details.jsonl \
+  --keep-list data/audit/v0_2/keep_samples.jsonl \
+  --out data/reports/v0_2 \
+  --pool-out data/reports/v0_2/candidate_keep_pool.jsonl
+```
+
+`arb hardness` annotates each sample with direct path hints, basename hints, module-token overlap, same-directory gold, lexical rank bucket, gold count, and task-balance weight. The generated `candidate_keep_pool.jsonl` sorts hard candidates first for V1 manual audit; V0.2 remains frozen.
+
+Filter the hard candidate pool into a V1 seed set:
+
+```bash
+arb hard-pool-filter \
+  --pool data/reports/v0_2/candidate_keep_pool.jsonl \
+  --audit data/reports/v0_2/top_hard_first_pass_audit.jsonl \
+  --out data/reports/v0_2/v1_seed_candidates.jsonl \
+  --summary data/reports/v0_2/v1_seed_summary.json \
+  --audit-out data/reports/v0_2/v1_seed_audit_samples.jsonl \
+  --audit-csv data/reports/v0_2/v1_seed_audit_samples.csv
+```
+
+`arb hard-pool-filter` deduplicates by repo, PR, and gold files; applies manual audit verdicts; drops obvious generated/template/generic-test noise; and writes the next V1 seed audit sheet.
+
 ## Current Lexical Baseline
 
 The published V0.2 lexical baseline evaluates all 62 samples with no skipped samples.
