@@ -17,6 +17,7 @@ V1_TARGET_COUNTS = {"code2test": 150, "comment2context": 150, "trace2code": 50}
 SEED_AUDIT_FIELDS = ("sample_id", "task_type", "repo", "query_excerpt", "gold_files", "verdict", "reason", "keep", "notes")
 DROP_AUDIT_VERDICTS = {"ambiguous", "duplicate", "leaked", "noisy", "too_easy"}
 KEEP_AUDIT_VERDICTS = {"valid"}
+SEED_AUDIT_VERDICTS = KEEP_AUDIT_VERDICTS | DROP_AUDIT_VERDICTS
 GENERIC_MODULE_TOKENS = {
     "api",
     "app",
@@ -462,8 +463,10 @@ def acceptance_gates(rows: list[dict[str, Any]], metrics_by_split: dict[str, lis
     hard_valid_count = sum(1 for row in rows if row["recommended_split"] == "hard_curated")
     return {
         "hard_valid_count_ge_50": hard_valid_count >= 50,
-        "lexical_overall_recall20_le_0_65": all_metrics["Recall@20"] <= 0.65,
-        "lexical_overall_mrr_le_0_25": all_metrics["MRR"] <= 0.25,
+        "hard_curated_recall20_le_0_65": hard_metrics["Recall@20"] <= 0.65,
+        "hard_curated_mrr_le_0_15": hard_metrics["MRR"] <= 0.15,
+        "all_curated_recall20_le_0_65": all_metrics["Recall@20"] <= 0.65,
+        "all_curated_mrr_le_0_25": all_metrics["MRR"] <= 0.25,
         "hard_curated_metrics": hard_metrics,
         "all_curated_metrics": all_metrics,
     }
@@ -824,6 +827,7 @@ def summarize_seed_pool(
         "metrics": metrics,
         "quality_gates": {
             "kept_ge_15": len(selected) >= 15,
+            "kept_ge_50": len(selected) >= 50,
             "mrr_le_0_15": metrics["MRR"] <= 0.15,
             "recall20_le_0_65": metrics["Recall@20"] <= 0.65,
         },
@@ -859,6 +863,69 @@ def load_seed_audit(path: Path | None) -> dict[str, dict[str, Any]]:
     else:
         rows = read_jsonl(path)
     return {str(row.get("sample_id")): row for row in rows if row.get("sample_id")}
+
+
+def summarize_seed_audit(audit_path: Path, out_path: Path, keep_list_path: Path) -> dict[str, Any]:
+    rows = list(load_seed_audit(audit_path).values())
+    keep_rows: list[dict[str, Any]] = []
+    dropped_rows: list[dict[str, Any]] = []
+    pending_rows: list[dict[str, Any]] = []
+    invalid_verdicts = Counter()
+    verdicts = Counter()
+    by_task = Counter()
+    kept_by_task = Counter()
+    dropped_by_task = Counter()
+
+    for row in rows:
+        sample_id = str(row.get("sample_id", ""))
+        task_type = str(row.get("task_type", ""))
+        verdict = normalize_seed_verdict(row.get("verdict"))
+        keep_flag = audit_keep_flag(row)
+        if verdict:
+            verdicts[verdict] += 1
+        else:
+            verdicts["pending"] += 1
+        if verdict and verdict not in SEED_AUDIT_VERDICTS:
+            invalid_verdicts[verdict] += 1
+        if task_type:
+            by_task[task_type] += 1
+
+        keep = verdict in KEEP_AUDIT_VERDICTS or keep_flag is True
+        drop = verdict in DROP_AUDIT_VERDICTS or keep_flag is False
+        normalized = dict(row)
+        normalized["sample_id"] = sample_id
+        normalized["task_type"] = task_type
+        normalized["verdict"] = verdict
+        normalized["keep"] = keep
+        if keep and not drop:
+            keep_rows.append(normalized)
+            if task_type:
+                kept_by_task[task_type] += 1
+        elif drop:
+            dropped_rows.append(normalized)
+            if task_type:
+                dropped_by_task[task_type] += 1
+        else:
+            pending_rows.append(normalized)
+
+    write_jsonl(keep_list_path, keep_rows)
+    summary = {
+        "generated_at": utc_now(),
+        "input": str(audit_path),
+        "output": str(out_path),
+        "keep_list": str(keep_list_path),
+        "total": len(rows),
+        "kept": len(keep_rows),
+        "dropped": len(dropped_rows),
+        "pending": len(pending_rows),
+        "verdicts": dict(sorted(verdicts.items())),
+        "invalid_verdicts": dict(sorted(invalid_verdicts.items())),
+        "by_task": dict(sorted(by_task.items())),
+        "kept_by_task": dict(sorted(kept_by_task.items())),
+        "dropped_by_task": dict(sorted(dropped_by_task.items())),
+    }
+    write_json(out_path, summary)
+    return summary
 
 
 def normalize_seed_verdict(value: Any) -> str:

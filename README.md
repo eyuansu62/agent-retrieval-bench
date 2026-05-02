@@ -143,6 +143,26 @@ arb hard-pool-filter \
 
 `arb hard-pool-filter` deduplicates by repo, PR, and gold files; applies manual audit verdicts; drops obvious generated/template/generic-test noise; and writes the next V1 seed audit sheet.
 
+Summarize a V1 seed audit sheet and write a keep list:
+
+```bash
+arb seed-audit-summary \
+  data/reports/v0_2/v1_seed_audit_samples.csv \
+  --out data/reports/v0_2/v1_seed_audit_summary.json \
+  --keep-list data/reports/v0_2/v1_seed_keep.jsonl
+```
+
+Merge existing local benchmark/derived samples into a V1 hard-mining candidate set without crawling new repos:
+
+```bash
+arb export-hardmine-candidates \
+  --corpus-manifest data/corpus/v0_2/corpus_manifest.jsonl \
+  --require-corpus \
+  --out data/benchmark/v1_candidate_round1
+```
+
+`arb export-hardmine-candidates` scans `data/benchmark/v0_2`, `data/derived_v0_2*`, and `data/derived_token_logs` by default; keeps only `code2test`, `comment2context`, and real `trace2code`; deduplicates by `sample_id`; drops leaked, schema-invalid, missing-gold, and missing-corpus samples; and writes both `samples.jsonl` and per-task JSONL files.
+
 ## Current Lexical Baseline
 
 The published V0.2 lexical baseline evaluates all 62 samples with no skipped samples.

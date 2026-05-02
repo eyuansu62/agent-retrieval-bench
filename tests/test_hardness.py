@@ -9,6 +9,7 @@ from agent_retrieval_bench.hardness import (
     hard_query_hints,
     lexical_rank_bucket,
     same_directory_gold,
+    summarize_seed_audit,
 )
 
 
@@ -255,6 +256,39 @@ class HardnessTests(unittest.TestCase):
             self.assertTrue(summary["quality_gates"]["kept_ge_15"] is False)
             self.assertTrue(audit_out.exists())
             self.assertTrue(audit_csv.exists())
+
+    def test_summarize_seed_audit_counts_extended_verdicts_and_writes_keep_list(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            audit_path = root / "seed_audit.csv"
+            out_path = root / "summary.json"
+            keep_list = root / "keep.jsonl"
+            audit_path.write_text(
+                "\n".join(
+                    [
+                        "sample_id,task_type,repo,query_excerpt,gold_files,verdict,reason,keep,notes",
+                        "valid-code,code2test,o/r,q,g,valid,,true,",
+                        "too-easy,comment2context,o/r,q,g,too_easy,,false,",
+                        "duplicate,comment2context,o/r,q,g,duplicate,,false,",
+                        "pending,trace2code,o/r,q,g,,,,",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            summary = summarize_seed_audit(audit_path, out_path, keep_list)
+            kept = [json.loads(line) for line in keep_list.read_text().splitlines()]
+
+            self.assertEqual(summary["total"], 4)
+            self.assertEqual(summary["kept"], 1)
+            self.assertEqual(summary["dropped"], 2)
+            self.assertEqual(summary["pending"], 1)
+            self.assertEqual(summary["verdicts"]["too_easy"], 1)
+            self.assertEqual(summary["verdicts"]["duplicate"], 1)
+            self.assertEqual(summary["kept_by_task"], {"code2test": 1})
+            self.assertEqual(kept[0]["sample_id"], "valid-code")
+            self.assertTrue(kept[0]["keep"])
 
 
 if __name__ == "__main__":

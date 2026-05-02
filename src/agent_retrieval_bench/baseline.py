@@ -88,12 +88,15 @@ def evaluate_lexical_baseline(
     validate_candidate_filter(candidate_filter)
     manifest = {} if dry_run else load_corpus_manifest(corpus_dir)
     keep_ids = load_keep_ids(keep_list)
+    samples = []
+    for sample in filter_samples(iter_samples(sample_paths), keep_ids):
+        if limit_samples and len(samples) >= limit_samples:
+            break
+        samples.append(sample)
     details: list[dict[str, Any]] = []
     skipped = Counter()
-    evaluated = 0
-    for sample in filter_samples(iter_samples(sample_paths), keep_ids):
-        if limit_samples and evaluated + sum(skipped.values()) >= limit_samples:
-            break
+    pending_by_chunks_path: dict[Path, list[tuple[int, dict[str, Any], list[str], str]]] = defaultdict(list)
+    for sample_index, sample in enumerate(samples):
         gold_files = target_gold_files(sample)
         if not gold_files:
             skipped["no_gold"] += 1
@@ -104,32 +107,24 @@ def evaluate_lexical_baseline(
             continue
         if dry_run:
             chunks = synthetic_chunks(sample)
-        else:
-            chunks_path = manifest.get((sample.get("repo"), sample.get("base_commit")))
-            if not chunks_path:
-                skipped["missing_corpus"] += 1
-                continue
-            chunks = read_jsonl(chunks_path)
-        chunks = filter_candidate_chunks(chunks, candidate_filter)
-        if not chunks:
-            skipped["empty_corpus"] += 1
+            append_lexical_detail(details, sample_index, sample, gold_files, query_text, chunks, candidate_filter, skipped)
             continue
-        ranked = rank_chunks(query_text, chunks)
-        metrics = sample_metrics(gold_files, ranked)
-        details.append(
-            {
-                "sample_id": sample.get("id"),
-                "task_type": sample.get("task_type"),
-                "repo": sample.get("repo"),
-                "base_commit": sample.get("base_commit"),
-                "candidate_filter": candidate_filter,
-                "gold_files": gold_files,
-                "gold_ranks": gold_file_ranks(gold_files, ranked),
-                "top_files": unique_ranked_paths(ranked)[:20],
-                "metrics": metrics,
-            }
-        )
-        evaluated += 1
+        chunks_path = manifest.get((sample.get("repo"), sample.get("base_commit")))
+        if not chunks_path:
+            skipped["missing_corpus"] += 1
+            continue
+        pending_by_chunks_path[chunks_path].append((sample_index, sample, gold_files, query_text))
+
+    for chunks_path, pending in pending_by_chunks_path.items():
+        chunks = filter_candidate_chunks(read_jsonl(chunks_path), candidate_filter)
+        if not chunks:
+            skipped["empty_corpus"] += len(pending)
+            continue
+        for sample_index, sample, gold_files, query_text in pending:
+            append_lexical_detail(details, sample_index, sample, gold_files, query_text, chunks, candidate_filter, skipped, pre_filtered=True)
+
+    details.sort(key=lambda item: item.pop("_sample_index", 0))
+    evaluated = len(details)
 
     summary = summarize_details(details)
     result = {
@@ -146,6 +141,40 @@ def evaluate_lexical_baseline(
     if details_path:
         _write_jsonl(details_path, details)
     return result
+
+
+def append_lexical_detail(
+    details: list[dict[str, Any]],
+    sample_index: int,
+    sample: dict[str, Any],
+    gold_files: list[str],
+    query_text: str,
+    chunks: list[dict[str, Any]],
+    candidate_filter: str,
+    skipped: Counter[str],
+    pre_filtered: bool = False,
+) -> None:
+    if not pre_filtered:
+        chunks = filter_candidate_chunks(chunks, candidate_filter)
+    if not chunks:
+        skipped["empty_corpus"] += 1
+        return
+    ranked = rank_chunks(query_text, chunks)
+    metrics = sample_metrics(gold_files, ranked)
+    details.append(
+        {
+            "_sample_index": sample_index,
+            "sample_id": sample.get("id"),
+            "task_type": sample.get("task_type"),
+            "repo": sample.get("repo"),
+            "base_commit": sample.get("base_commit"),
+            "candidate_filter": candidate_filter,
+            "gold_files": gold_files,
+            "gold_ranks": gold_file_ranks(gold_files, ranked),
+            "top_files": unique_ranked_paths(ranked)[:20],
+            "metrics": metrics,
+        }
+    )
 
 
 def load_corpus_manifest(corpus_dir: Path) -> dict[tuple[str, str], Path]:

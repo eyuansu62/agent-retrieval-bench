@@ -19,7 +19,8 @@ from .embedding_eval import (
     evaluate_embedding_baseline,
 )
 from .github_api import GitHubAPI
-from .hardness import diagnose_hardness, filter_hard_pool
+from .hardmine import DEFAULT_HARDMINE_SOURCES, DEFAULT_HARDMINE_TASKS, export_hardmine_candidates
+from .hardness import diagnose_hardness, filter_hard_pool, summarize_seed_audit
 from .io import load_targets, read_jsonl, repo_slug
 from .logs import crawl_job_logs
 from .model_report import report_model_leaderboard
@@ -60,6 +61,18 @@ def main(argv: list[str] | None = None) -> int:
     derive.add_argument("--repo", action="append", help="Repo to derive. Can be repeated. Defaults to raw dirs.")
     derive.add_argument("--max-changed-files", type=int, default=20)
 
+    hardmine_export = subparsers.add_parser("export-hardmine-candidates", help="Merge local samples into a V1 hard-mining candidate set.")
+    hardmine_export.add_argument("--source", action="append", type=Path, help="Source file or directory. Can be repeated.")
+    hardmine_export.add_argument("--out", type=Path, default=Path("data/benchmark/v1_candidate_round1"))
+    hardmine_export.add_argument(
+        "--tasks",
+        default=",".join(DEFAULT_HARDMINE_TASKS),
+        help="Comma-separated task types to export.",
+    )
+    hardmine_export.add_argument("--corpus-manifest", type=Path, help="Optional corpus manifest used to filter base commits.")
+    hardmine_export.add_argument("--require-corpus", action="store_true", help="Drop samples whose repo/base_commit is absent from the corpus manifest.")
+    hardmine_export.add_argument("--limit-samples", type=int)
+
     validate = subparsers.add_parser("validate", help="Validate derived sample JSONL files.")
     validate.add_argument("samples", nargs="+", type=Path)
 
@@ -75,6 +88,11 @@ def main(argv: list[str] | None = None) -> int:
     audit_summary.add_argument("audit", type=Path)
     audit_summary.add_argument("--out", type=Path, default=Path("data/audit/v0/summary.json"))
     audit_summary.add_argument("--keep-list", type=Path, default=Path("data/audit/v0/keep_samples.jsonl"))
+
+    seed_audit_summary = subparsers.add_parser("seed-audit-summary", help="Summarize V1 seed audit verdicts and write keep list.")
+    seed_audit_summary.add_argument("audit", type=Path)
+    seed_audit_summary.add_argument("--out", type=Path, default=Path("data/reports/v0_2/v1_seed_audit_summary.json"))
+    seed_audit_summary.add_argument("--keep-list", type=Path, default=Path("data/reports/v0_2/v1_seed_keep.jsonl"))
 
     export_curated = subparsers.add_parser("export-curated", help="Export audited keep-list samples into benchmark JSONL files.")
     export_curated.add_argument("--derived", type=Path, default=Path("data/derived_token_logs"))
@@ -249,6 +267,19 @@ def main(argv: list[str] | None = None) -> int:
         result = {repo: derive_repo(args.raw, repo, args.out, args.max_changed_files) for repo in repos}
         print(json.dumps(result, indent=2, ensure_ascii=False))
         return 0
+    if args.command == "export-hardmine-candidates":
+        tasks = [task.strip() for task in args.tasks.split(",") if task.strip()]
+        sources = args.source or list(DEFAULT_HARDMINE_SOURCES)
+        result = export_hardmine_candidates(
+            sources=sources,
+            out_dir=args.out,
+            tasks=tasks,
+            corpus_manifest=args.corpus_manifest,
+            require_corpus=args.require_corpus,
+            limit_samples=args.limit_samples,
+        )
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return 0
     if args.command == "validate":
         result = [validate_samples(path) for path in args.samples]
         print(json.dumps(result, indent=2, ensure_ascii=False))
@@ -262,6 +293,10 @@ def main(argv: list[str] | None = None) -> int:
         result = summarize_audit(args.audit, out_path=args.out, keep_list_path=args.keep_list)
         print(json.dumps(result, indent=2, ensure_ascii=False))
         return 0
+    if args.command == "seed-audit-summary":
+        result = summarize_seed_audit(args.audit, out_path=args.out, keep_list_path=args.keep_list)
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return 1 if result["invalid_verdicts"] else 0
     if args.command == "export-curated":
         tasks = [task.strip() for task in args.tasks.split(",") if task.strip()]
         result = export_curated_samples(
