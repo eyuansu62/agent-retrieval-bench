@@ -876,17 +876,85 @@ def seed_audit_rows(rows: list[dict[str, Any]]) -> list[dict[str, str]]:
 def load_seed_audit(path: Path | None) -> dict[str, dict[str, Any]]:
     if not path or not path.exists():
         return {}
-    rows: list[dict[str, Any]] = []
+    rows = read_seed_audit_rows(path)
+    return {str(row.get("sample_id")): row for row in rows if row.get("sample_id")}
+
+
+def read_seed_audit_rows(path: Path) -> list[dict[str, Any]]:
     if path.suffix.lower() == ".csv":
         with path.open("r", encoding="utf-8", newline="") as handle:
-            rows = [dict(row) for row in csv.DictReader(handle)]
-    else:
-        rows = read_jsonl(path)
-    return {str(row.get("sample_id")): row for row in rows if row.get("sample_id")}
+            return [dict(row) for row in csv.DictReader(handle)]
+    return read_jsonl(path)
 
 
 def summarize_seed_audit(audit_path: Path, out_path: Path, keep_list_path: Path) -> dict[str, Any]:
     rows = list(load_seed_audit(audit_path).values())
+    summary = summarize_seed_audit_rows(rows, input_label=str(audit_path), out_path=out_path, keep_list_path=keep_list_path)
+    return summary
+
+
+def merge_seed_audits(audit_paths: Iterable[Path], out_path: Path, keep_list_path: Path) -> dict[str, Any]:
+    rows_by_id: dict[str, dict[str, Any]] = {}
+    row_sources: dict[str, str] = {}
+    conflicting_ids: set[str] = set()
+    conflicts: list[dict[str, Any]] = []
+    duplicate_rows = 0
+    total_rows = 0
+    inputs: list[str] = []
+
+    for audit_path in audit_paths:
+        inputs.append(str(audit_path))
+        for row in read_seed_audit_rows(audit_path):
+            total_rows += 1
+            sample_id = str(row.get("sample_id", ""))
+            if not sample_id:
+                continue
+            normalized = normalize_audit_row(row)
+            if sample_id not in rows_by_id:
+                rows_by_id[sample_id] = normalized
+                row_sources[sample_id] = str(audit_path)
+                continue
+            duplicate_rows += 1
+            existing = rows_by_id[sample_id]
+            if seed_audit_conflict(existing, normalized):
+                conflicting_ids.add(sample_id)
+                conflicts.append(
+                    {
+                        "sample_id": sample_id,
+                        "first_audit": row_sources[sample_id],
+                        "second_audit": str(audit_path),
+                        "first_verdict": existing.get("verdict", ""),
+                        "second_verdict": normalized.get("verdict", ""),
+                        "first_keep": existing.get("keep"),
+                        "second_keep": normalized.get("keep"),
+                    }
+                )
+
+    merged_rows = [row for sample_id, row in rows_by_id.items() if sample_id not in conflicting_ids]
+    summary = summarize_seed_audit_rows(
+        merged_rows,
+        input_label=inputs,
+        out_path=out_path,
+        keep_list_path=keep_list_path,
+    )
+    summary["inputs"] = inputs
+    summary["total_rows"] = total_rows
+    summary["unique_rows"] = len(rows_by_id)
+    summary["duplicate_rows"] = duplicate_rows
+    summary["conflicts"] = conflicts
+    summary["conflict_count"] = len(conflicts)
+    summary["excluded_conflict_ids"] = sorted(conflicting_ids)
+    write_json(out_path, summary)
+    return summary
+
+
+def summarize_seed_audit_rows(
+    rows: Iterable[dict[str, Any]],
+    input_label: str | list[str],
+    out_path: Path,
+    keep_list_path: Path,
+) -> dict[str, Any]:
+    rows = list(rows)
     keep_rows: list[dict[str, Any]] = []
     dropped_rows: list[dict[str, Any]] = []
     pending_rows: list[dict[str, Any]] = []
@@ -912,10 +980,7 @@ def summarize_seed_audit(audit_path: Path, out_path: Path, keep_list_path: Path)
 
         keep = verdict in KEEP_AUDIT_VERDICTS and keep_flag is True
         drop = verdict in DROP_AUDIT_VERDICTS or keep_flag is False
-        normalized = dict(row)
-        normalized["sample_id"] = sample_id
-        normalized["task_type"] = task_type
-        normalized["verdict"] = verdict
+        normalized = normalize_audit_row(row)
         normalized["keep"] = keep
         if keep and not drop:
             keep_rows.append(normalized)
@@ -931,7 +996,7 @@ def summarize_seed_audit(audit_path: Path, out_path: Path, keep_list_path: Path)
     write_jsonl(keep_list_path, keep_rows)
     summary = {
         "generated_at": utc_now(),
-        "input": str(audit_path),
+        "input": input_label,
         "output": str(out_path),
         "keep_list": str(keep_list_path),
         "total": len(rows),
@@ -946,6 +1011,26 @@ def summarize_seed_audit(audit_path: Path, out_path: Path, keep_list_path: Path)
     }
     write_json(out_path, summary)
     return summary
+
+
+def normalize_audit_row(row: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(row)
+    normalized["sample_id"] = str(row.get("sample_id", ""))
+    normalized["task_type"] = str(row.get("task_type", ""))
+    normalized["verdict"] = normalize_seed_verdict(row.get("verdict"))
+    keep_flag = audit_keep_flag(row)
+    if keep_flag is not None:
+        normalized["keep"] = keep_flag
+    return normalized
+
+
+def seed_audit_conflict(left: dict[str, Any], right: dict[str, Any]) -> bool:
+    return (
+        normalize_seed_verdict(left.get("verdict")) != normalize_seed_verdict(right.get("verdict"))
+        or audit_keep_flag(left) != audit_keep_flag(right)
+        or str(left.get("task_type", "")) != str(right.get("task_type", ""))
+        or str(left.get("repo", "")) != str(right.get("repo", ""))
+    )
 
 
 def normalize_seed_verdict(value: Any) -> str:

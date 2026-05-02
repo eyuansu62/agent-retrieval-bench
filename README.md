@@ -152,6 +152,18 @@ arb seed-audit-summary \
   --keep-list data/reports/v0_2/v1_seed_keep.jsonl
 ```
 
+Merge multiple V1 seed audit rounds into one freeze-gate keep list:
+
+```bash
+arb merge-seed-audits \
+  --audit data/reports/v1_candidate_round1/v1_seed_audit_samples.csv \
+  --audit data/reports/v1_candidate_round2/v1_seed_audit_samples.csv \
+  --out data/reports/v1_seed_round1/audit_summary.json \
+  --keep-list data/reports/v1_seed_round1/keep_samples.jsonl
+```
+
+`arb merge-seed-audits` accepts CSV and JSONL inputs, deduplicates repeated sample IDs, fails closed on conflicting verdicts, and keeps only `valid` rows explicitly marked `keep=true`.
+
 Merge existing local benchmark/derived samples into a V1 hard-mining candidate set without crawling new repos:
 
 ```bash

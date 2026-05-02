@@ -20,7 +20,7 @@ from .embedding_eval import (
 )
 from .github_api import GitHubAPI
 from .hardmine import DEFAULT_HARDMINE_SOURCES, DEFAULT_HARDMINE_TASKS, export_hardmine_candidates
-from .hardness import diagnose_hardness, filter_hard_pool, summarize_seed_audit
+from .hardness import diagnose_hardness, filter_hard_pool, merge_seed_audits, summarize_seed_audit
 from .io import load_targets, read_jsonl, repo_slug
 from .logs import crawl_job_logs
 from .model_report import report_model_leaderboard
@@ -94,6 +94,11 @@ def main(argv: list[str] | None = None) -> int:
     seed_audit_summary.add_argument("audit", type=Path)
     seed_audit_summary.add_argument("--out", type=Path, default=Path("data/reports/v0_2/v1_seed_audit_summary.json"))
     seed_audit_summary.add_argument("--keep-list", type=Path, default=Path("data/reports/v0_2/v1_seed_keep.jsonl"))
+
+    merge_seed_audit = subparsers.add_parser("merge-seed-audits", help="Merge multiple V1 seed audit files into one keep list.")
+    merge_seed_audit.add_argument("--audit", action="append", type=Path, required=True, help="Audit CSV/JSONL path. Can be repeated.")
+    merge_seed_audit.add_argument("--out", type=Path, default=Path("data/reports/v1_seed_round1/audit_summary.json"))
+    merge_seed_audit.add_argument("--keep-list", type=Path, default=Path("data/reports/v1_seed_round1/keep_samples.jsonl"))
 
     export_curated = subparsers.add_parser("export-curated", help="Export audited keep-list samples into benchmark JSONL files.")
     export_curated.add_argument("--derived", type=Path, default=Path("data/derived_token_logs"))
@@ -313,6 +318,10 @@ def main(argv: list[str] | None = None) -> int:
         result = summarize_seed_audit(args.audit, out_path=args.out, keep_list_path=args.keep_list)
         print(json.dumps(result, indent=2, ensure_ascii=False))
         return 1 if result["invalid_verdicts"] else 0
+    if args.command == "merge-seed-audits":
+        result = merge_seed_audits(args.audit, out_path=args.out, keep_list_path=args.keep_list)
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return 1 if result["invalid_verdicts"] or result["conflicts"] else 0
     if args.command == "export-curated":
         tasks = [task.strip() for task in args.tasks.split(",") if task.strip()]
         result = export_curated_samples(

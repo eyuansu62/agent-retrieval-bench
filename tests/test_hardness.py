@@ -8,6 +8,7 @@ from agent_retrieval_bench.hardness import (
     filter_hard_pool,
     hard_query_hints,
     lexical_rank_bucket,
+    merge_seed_audits,
     same_directory_gold,
     summarize_seed_audit,
 )
@@ -337,6 +338,71 @@ class HardnessTests(unittest.TestCase):
             self.assertEqual(summary["kept_by_task"], {"code2test": 1})
             self.assertEqual(kept[0]["sample_id"], "valid-code")
             self.assertTrue(kept[0]["keep"])
+
+    def test_merge_seed_audits_dedupes_mixed_inputs_and_requires_keep_true(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            csv_audit = root / "round1.csv"
+            jsonl_audit = root / "round2.jsonl"
+            out_path = root / "merged_summary.json"
+            keep_list = root / "merged_keep.jsonl"
+            csv_audit.write_text(
+                "\n".join(
+                    [
+                        "sample_id,task_type,repo,query_excerpt,gold_files,verdict,reason,keep,notes",
+                        "valid-code,code2test,o/r,q,g,valid,,true,",
+                        "valid-without-keep,code2test,o/r,q,g,valid,,,",
+                        "same-duplicate,comment2context,o/r,q,g,valid,,true,",
+                        "conflict,comment2context,o/r,q,g,valid,,true,",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            write_jsonl(
+                jsonl_audit,
+                [
+                    {
+                        "sample_id": "same-duplicate",
+                        "task_type": "comment2context",
+                        "repo": "o/r",
+                        "query_excerpt": "q",
+                        "gold_files": "g",
+                        "verdict": "valid",
+                        "keep": True,
+                    },
+                    {
+                        "sample_id": "json-valid",
+                        "task_type": "comment2context",
+                        "repo": "o/r",
+                        "query_excerpt": "q",
+                        "gold_files": "g",
+                        "verdict": "valid",
+                        "keep": True,
+                    },
+                    {
+                        "sample_id": "conflict",
+                        "task_type": "comment2context",
+                        "repo": "o/r",
+                        "query_excerpt": "q",
+                        "gold_files": "g",
+                        "verdict": "noisy",
+                        "keep": False,
+                    },
+                ],
+            )
+
+            summary = merge_seed_audits([csv_audit, jsonl_audit], out_path, keep_list)
+            kept = [json.loads(line) for line in keep_list.read_text().splitlines()]
+
+            self.assertEqual(summary["total_rows"], 7)
+            self.assertEqual(summary["unique_rows"], 5)
+            self.assertEqual(summary["duplicate_rows"], 2)
+            self.assertEqual(summary["conflict_count"], 1)
+            self.assertEqual(summary["kept"], 3)
+            self.assertEqual(summary["pending"], 1)
+            self.assertEqual([row["sample_id"] for row in kept], ["valid-code", "same-duplicate", "json-valid"])
+            self.assertNotIn("conflict", {row["sample_id"] for row in kept})
 
 
 if __name__ == "__main__":
