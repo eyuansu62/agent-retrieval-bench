@@ -257,6 +257,53 @@ class HardnessTests(unittest.TestCase):
             self.assertTrue(audit_out.exists())
             self.assertTrue(audit_csv.exists())
 
+    def test_filter_hard_pool_can_exclude_audited_rows_and_prioritize_tasks(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            pool_path = root / "pool.jsonl"
+            audit_path = root / "audit.jsonl"
+            out_path = root / "seed.jsonl"
+            summary_path = root / "summary.json"
+
+            def row(sample_id, task_type):
+                return {
+                    "sample_id": sample_id,
+                    "task_type": task_type,
+                    "repo": "o/r",
+                    "pr_url": f"https://example.test/{sample_id}",
+                    "gold_files": [f"tests/{sample_id}.py"],
+                    "gold_count": 1,
+                    "gold_in_corpus": True,
+                    "recommended_split": "hard_curated",
+                    "hardness_score": 1.0,
+                    "lexical_rank_bucket": "miss@20",
+                    "direct_path_hint": False,
+                    "basename_hint": False,
+                    "module_overlap": False,
+                    "same_directory_gold": False,
+                    "query_excerpt": "behavior changes when invalid input returns an error",
+                    "metrics": {"Recall@5": 0, "Recall@10": 0, "Recall@20": 0, "MRR": 0, "gold_coverage@8k": 0},
+                }
+
+            write_jsonl(pool_path, [row("old", "code2test"), row("new-comment", "comment2context"), row("new-code", "code2test")])
+            write_jsonl(audit_path, [{"sample_id": "old", "verdict": "valid", "keep": True}])
+
+            result = filter_hard_pool(
+                pool_path=pool_path,
+                out_path=out_path,
+                summary_path=summary_path,
+                audit_path=audit_path,
+                exclude_audited=True,
+                task_priority=["code2test", "comment2context"],
+            )
+            selected = [json.loads(line) for line in out_path.read_text().splitlines()]
+            summary = json.loads(summary_path.read_text())
+
+            self.assertEqual(result["kept"], 2)
+            self.assertEqual([row["sample_id"] for row in selected], ["new-code", "new-comment"])
+            self.assertEqual(summary["drop_reasons"]["already_audited"], 1)
+            self.assertTrue(summary["inputs"]["exclude_audited"])
+
     def test_summarize_seed_audit_counts_extended_verdicts_and_writes_keep_list(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -268,6 +315,7 @@ class HardnessTests(unittest.TestCase):
                     [
                         "sample_id,task_type,repo,query_excerpt,gold_files,verdict,reason,keep,notes",
                         "valid-code,code2test,o/r,q,g,valid,,true,",
+                        "valid-without-keep,code2test,o/r,q,g,valid,,,",
                         "too-easy,comment2context,o/r,q,g,too_easy,,false,",
                         "duplicate,comment2context,o/r,q,g,duplicate,,false,",
                         "pending,trace2code,o/r,q,g,,,,",
@@ -280,10 +328,10 @@ class HardnessTests(unittest.TestCase):
             summary = summarize_seed_audit(audit_path, out_path, keep_list)
             kept = [json.loads(line) for line in keep_list.read_text().splitlines()]
 
-            self.assertEqual(summary["total"], 4)
+            self.assertEqual(summary["total"], 5)
             self.assertEqual(summary["kept"], 1)
             self.assertEqual(summary["dropped"], 2)
-            self.assertEqual(summary["pending"], 1)
+            self.assertEqual(summary["pending"], 2)
             self.assertEqual(summary["verdicts"]["too_easy"], 1)
             self.assertEqual(summary["verdicts"]["duplicate"], 1)
             self.assertEqual(summary["kept_by_task"], {"code2test": 1})

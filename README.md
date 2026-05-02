@@ -163,6 +163,29 @@ arb export-hardmine-candidates \
 
 `arb export-hardmine-candidates` scans `data/benchmark/v0_2`, `data/derived_v0_2*`, and `data/derived_token_logs` by default; keeps only `code2test`, `comment2context`, and real `trace2code`; deduplicates by `sample_id`; drops leaked, schema-invalid, missing-gold, and missing-corpus samples; and writes both `samples.jsonl` and per-task JSONL files.
 
+Compare a curated V1 seed against V0.2 and its audit summary:
+
+```bash
+arb report-v1-seed \
+  --audit-summary data/reports/v1_candidate_round1/v1_seed_audit_summary.json \
+  --out data/reports/v1_candidate_round1/v1_seed_comparison.md \
+  --json-out data/reports/v1_candidate_round1/v1_seed_comparison.json
+```
+
+If the first audit is short, generate a second review batch from the remaining hard pool:
+
+```bash
+arb hard-pool-filter \
+  --pool data/reports/v1_candidate_round1/candidate_keep_pool.jsonl \
+  --audit data/reports/v1_candidate_round1/v1_seed_audit_samples.csv \
+  --exclude-audited \
+  --task-priority code2test,trace2code,comment2context \
+  --out data/reports/v1_candidate_round2/v1_seed_candidates.jsonl \
+  --summary data/reports/v1_candidate_round2/v1_seed_summary.json \
+  --audit-out data/reports/v1_candidate_round2/v1_seed_audit_samples.jsonl \
+  --audit-csv data/reports/v1_candidate_round2/v1_seed_audit_samples.csv
+```
+
 ## Current Lexical Baseline
 
 The published V0.2 lexical baseline evaluates all 62 samples with no skipped samples.

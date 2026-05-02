@@ -25,6 +25,7 @@ from .io import load_targets, read_jsonl, repo_slug
 from .logs import crawl_job_logs
 from .model_report import report_model_leaderboard
 from .quality import validate_samples
+from .seed_report import report_v1_seed
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -217,6 +218,21 @@ def main(argv: list[str] | None = None) -> int:
     hard_pool_filter.add_argument("--audit-limit", type=int, default=120)
     hard_pool_filter.add_argument("--min-score", type=float, default=0.0)
     hard_pool_filter.add_argument("--no-unaudited", action="store_true", help="Only keep manually audited valid candidates.")
+    hard_pool_filter.add_argument("--exclude-audited", action="store_true", help="Drop any sample already present in the audit file.")
+    hard_pool_filter.add_argument(
+        "--task-priority",
+        default="",
+        help="Comma-separated task ordering for selected/audit rows, e.g. code2test,trace2code,comment2context.",
+    )
+
+    report_seed = subparsers.add_parser("report-v1-seed", help="Compare a curated V1 seed against V0.2 and audit outcomes.")
+    report_seed.add_argument("--base-samples", type=Path, default=Path("data/benchmark/v0_2/samples.jsonl"))
+    report_seed.add_argument("--base-eval", type=Path, default=Path("data/eval/v0_2/lexical_summary.json"))
+    report_seed.add_argument("--seed-samples", type=Path, default=Path("data/benchmark/v1_seed_round1/samples.jsonl"))
+    report_seed.add_argument("--seed-eval", type=Path, default=Path("data/eval/v1_seed_round1/lexical_summary.json"))
+    report_seed.add_argument("--audit-summary", type=Path, default=Path("data/reports/v1_candidate_round1/v1_seed_audit_summary.json"))
+    report_seed.add_argument("--out", type=Path, default=Path("data/reports/v1_candidate_round1/v1_seed_comparison.md"))
+    report_seed.add_argument("--json-out", type=Path, default=Path("data/reports/v1_candidate_round1/v1_seed_comparison.json"))
 
     report_models = subparsers.add_parser("report-models", help="Build a Markdown/JSON leaderboard from eval summaries.")
     report_models.add_argument("--eval-dir", type=Path, default=Path("data/eval/v0_1"))
@@ -425,6 +441,7 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(result, indent=2, ensure_ascii=False))
         return 0
     if args.command == "hard-pool-filter":
+        task_priority = [task.strip() for task in args.task_priority.split(",") if task.strip()]
         result = filter_hard_pool(
             pool_path=args.pool,
             out_path=args.out,
@@ -435,6 +452,20 @@ def main(argv: list[str] | None = None) -> int:
             audit_limit=args.audit_limit,
             min_score=args.min_score,
             include_unaudited=not args.no_unaudited,
+            exclude_audited=args.exclude_audited,
+            task_priority=task_priority or None,
+        )
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return 0
+    if args.command == "report-v1-seed":
+        result = report_v1_seed(
+            base_samples_path=args.base_samples,
+            base_eval_path=args.base_eval,
+            seed_samples_path=args.seed_samples,
+            seed_eval_path=args.seed_eval,
+            audit_summary_path=args.audit_summary,
+            out_path=args.out,
+            json_out_path=args.json_out,
         )
         print(json.dumps(result, indent=2, ensure_ascii=False))
         return 0

@@ -669,26 +669,42 @@ def filter_hard_pool(
     audit_limit: int = 120,
     min_score: float = 0.0,
     include_unaudited: bool = True,
+    exclude_audited: bool = False,
+    task_priority: list[str] | None = None,
 ) -> dict[str, Any]:
     pool = read_jsonl(pool_path)
     audit_by_id = load_seed_audit(audit_path)
     reviewed: list[dict[str, Any]] = []
     drops: list[dict[str, Any]] = []
     for row in pool:
+        if exclude_audited and str(row.get("sample_id")) in audit_by_id:
+            candidate = dict(row)
+            candidate.update(
+                {
+                    "seed_decision": "drop",
+                    "seed_source": "audit_exclude",
+                    "filter_reasons": ["already_audited"],
+                    "audit_verdict": normalize_seed_verdict(audit_by_id[str(row.get("sample_id"))].get("verdict")),
+                    "audit_keep": audit_keep_flag(audit_by_id[str(row.get("sample_id"))]),
+                    "cluster_key": cluster_key(row),
+                }
+            )
+            drops.append(candidate)
+            continue
         candidate = annotate_seed_candidate(row, audit_by_id.get(str(row.get("sample_id")), {}), min_score, include_unaudited)
         if candidate["seed_decision"] == "keep":
             reviewed.append(candidate)
         else:
             drops.append(candidate)
 
-    selected, duplicate_drops = dedupe_seed_candidates(reviewed)
-    selected.sort(key=seed_sort_key)
+    selected, duplicate_drops = dedupe_seed_candidates(reviewed, task_priority)
+    selected.sort(key=lambda row: seed_sort_key(row, task_priority))
     for index, row in enumerate(selected, start=1):
         row["seed_rank"] = index
     drops.extend(duplicate_drops)
     drops.sort(key=lambda row: (row.get("task_type", ""), row.get("repo", ""), row.get("sample_id", "")))
 
-    summary = summarize_seed_pool(pool, selected, drops, audit_path, min_score, include_unaudited)
+    summary = summarize_seed_pool(pool, selected, drops, audit_path, min_score, include_unaudited, exclude_audited, task_priority)
     write_jsonl(out_path, selected)
     write_json(summary_path, summary)
     audit_outputs: dict[str, str] = {}
@@ -780,7 +796,7 @@ def automatic_drop_reasons(row: dict[str, Any]) -> list[str]:
     return dedupe(reasons)
 
 
-def dedupe_seed_candidates(rows: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+def dedupe_seed_candidates(rows: list[dict[str, Any]], task_priority: list[str] | None = None) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     by_cluster: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in rows:
         by_cluster[row["cluster_key"]].append(row)
@@ -788,7 +804,7 @@ def dedupe_seed_candidates(rows: list[dict[str, Any]]) -> tuple[list[dict[str, A
     selected: list[dict[str, Any]] = []
     drops: list[dict[str, Any]] = []
     for cluster_rows in by_cluster.values():
-        ordered = sorted(cluster_rows, key=seed_sort_key)
+        ordered = sorted(cluster_rows, key=lambda row: seed_sort_key(row, task_priority))
         selected.append(ordered[0])
         for duplicate in ordered[1:]:
             duplicate = dict(duplicate)
@@ -806,6 +822,8 @@ def summarize_seed_pool(
     audit_path: Path | None,
     min_score: float,
     include_unaudited: bool,
+    exclude_audited: bool = False,
+    task_priority: list[str] | None = None,
 ) -> dict[str, Any]:
     metrics = average_metrics([row["metrics"] for row in selected if row.get("metrics")])
     kept_by_task = Counter(row.get("task_type", "") for row in selected)
@@ -818,6 +836,8 @@ def summarize_seed_pool(
             "audit": str(audit_path) if audit_path else None,
             "min_score": min_score,
             "include_unaudited": include_unaudited,
+            "exclude_audited": exclude_audited,
+            "task_priority": task_priority or [],
         },
         "kept": len(selected),
         "dropped": len(drops),
@@ -890,7 +910,7 @@ def summarize_seed_audit(audit_path: Path, out_path: Path, keep_list_path: Path)
         if task_type:
             by_task[task_type] += 1
 
-        keep = verdict in KEEP_AUDIT_VERDICTS or keep_flag is True
+        keep = verdict in KEEP_AUDIT_VERDICTS and keep_flag is True
         drop = verdict in DROP_AUDIT_VERDICTS or keep_flag is False
         normalized = dict(row)
         normalized["sample_id"] = sample_id
@@ -953,22 +973,25 @@ def cluster_key(row: dict[str, Any]) -> str:
     return json.dumps([row.get("repo", ""), pr_url, gold_files], ensure_ascii=False, sort_keys=True)
 
 
-def seed_sort_key(row: dict[str, Any]) -> tuple[Any, ...]:
+def seed_sort_key(row: dict[str, Any], task_priority: list[str] | None = None) -> tuple[Any, ...]:
     source_rank = {"audit_keep": 0, "auto_keep": 1, "cluster_dedupe": 2, "auto_drop": 3, "audit_drop": 4}.get(
         str(row.get("seed_source", "")),
         5,
     )
+    task_ranks = {task: index for index, task in enumerate(task_priority or [])}
     lexical_bucket_rank = {"miss@20": 0, "partial@20": 1, "deep@20": 2, "top20": 3, "top5": 4}.get(
         str(row.get("lexical_rank_bucket", "")),
         5,
     )
+    task_type = str(row.get("task_type", ""))
     return (
         source_rank,
+        task_ranks.get(task_type, len(task_ranks)),
         int(bool(row.get("module_overlap"))),
         int(bool(row.get("same_directory_gold"))),
         lexical_bucket_rank,
         -float(row.get("hardness_score") or 0.0),
-        row.get("task_type", ""),
+        task_type,
         row.get("repo", ""),
         row.get("sample_id", ""),
     )
