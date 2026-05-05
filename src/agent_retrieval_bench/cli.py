@@ -8,6 +8,7 @@ from pathlib import Path
 from .audit import summarize_audit, write_audit_sample
 from .baseline import CANDIDATE_FILTERS, evaluate_lexical_baseline
 from .clone import verify_base_commits
+from .code2test_pr import mine_code2test_prs
 from .corpus import build_candidate_corpus, sample_paths_from_derived
 from .curate import export_curated_samples
 from .crawler import crawl_commit_details_for_raw, crawl_repo, write_manifest
@@ -26,6 +27,7 @@ from .logs import crawl_job_logs
 from .model_report import report_model_leaderboard
 from .quality import validate_samples
 from .seed_report import report_v1_seed
+from .trace_preflight import trace_preflight
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -73,6 +75,27 @@ def main(argv: list[str] | None = None) -> int:
     hardmine_export.add_argument("--corpus-manifest", type=Path, help="Optional corpus manifest used to filter base commits.")
     hardmine_export.add_argument("--require-corpus", action="store_true", help="Drop samples whose repo/base_commit is absent from the corpus manifest.")
     hardmine_export.add_argument("--limit-samples", type=int)
+
+    mine_code = subparsers.add_parser("mine-code2test-prs", help="Mine PR-level code2test candidates from raw PR files.")
+    mine_code.add_argument("--raw", type=Path, default=Path("data/raw_token"))
+    mine_code.add_argument("--out", type=Path, default=Path("data/benchmark/v1_code2test_pr_candidates"))
+    mine_code.add_argument("--report-out", type=Path, default=Path("data/reports/v1_code2test_pr_candidates"))
+    mine_code.add_argument("--audit", type=Path, default=Path("data/reports/v1/audited_ids.csv"))
+    mine_code.add_argument("--audited-pool", type=Path, default=Path("data/reports/v1_candidate_round1/candidate_keep_pool.jsonl"))
+    mine_code.add_argument("--corpus-manifest", type=Path)
+    mine_code.add_argument("--require-corpus", action="store_true")
+    mine_code.add_argument("--require-gold-in-corpus", action="store_true")
+    mine_code.add_argument("--repo", action="append", help="Repo to process. Defaults to raw dirs.")
+    mine_code.add_argument("--max-changed-files", type=int, default=20)
+    mine_code.add_argument("--max-tests", type=int, default=3)
+    mine_code.add_argument("--audit-limit", type=int, default=120)
+    mine_code.add_argument("--limit-samples", type=int)
+
+    trace_pref = subparsers.add_parser("trace-preflight", help="Count real root-cause trace candidates in raw signals.")
+    trace_pref.add_argument("--raw", type=Path, default=Path("data/raw_token"))
+    trace_pref.add_argument("--out", type=Path, default=Path("data/reports/v1_trace_preflight"))
+    trace_pref.add_argument("--repo", action="append", help="Repo to process. Defaults to raw dirs.")
+    trace_pref.add_argument("--max-changed-files", type=int, default=20)
 
     validate = subparsers.add_parser("validate", help="Validate derived sample JSONL files.")
     validate.add_argument("samples", nargs="+", type=Path)
@@ -298,6 +321,33 @@ def main(argv: list[str] | None = None) -> int:
             corpus_manifest=args.corpus_manifest,
             require_corpus=args.require_corpus,
             limit_samples=args.limit_samples,
+        )
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return 0
+    if args.command == "mine-code2test-prs":
+        result = mine_code2test_prs(
+            raw_dir=args.raw,
+            out_dir=args.out,
+            report_dir=args.report_out,
+            audit_path=args.audit,
+            audited_pool_path=args.audited_pool,
+            corpus_manifest=args.corpus_manifest,
+            require_corpus=args.require_corpus,
+            require_gold_in_corpus=args.require_gold_in_corpus,
+            repos=args.repo,
+            max_changed_files=args.max_changed_files,
+            max_tests=args.max_tests,
+            audit_limit=args.audit_limit,
+            limit_samples=args.limit_samples,
+        )
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return 0
+    if args.command == "trace-preflight":
+        result = trace_preflight(
+            raw_dir=args.raw,
+            out_dir=args.out,
+            repos=args.repo,
+            max_changed_files=args.max_changed_files,
         )
         print(json.dumps(result, indent=2, ensure_ascii=False))
         return 0
