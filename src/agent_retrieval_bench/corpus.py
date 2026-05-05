@@ -165,8 +165,8 @@ def build_commit_chunks(
     if existing is not None:
         return existing
 
-    paths = _git_lines(bare_repo, ["ls-tree", "-r", "--name-only", base_commit])
-    candidate_paths = [path for path in paths if is_candidate_path(path)]
+    tree_entries = _git_tree_entries(bare_repo, base_commit)
+    candidate_paths = [path for path in tree_entries if is_candidate_path(path)]
     if max_files_per_commit:
         candidate_paths = candidate_paths[:max_files_per_commit]
 
@@ -177,7 +177,7 @@ def build_commit_chunks(
     skipped_large = 0
     with chunks_path.open("w", encoding="utf-8") as handle:
         for path in candidate_paths:
-            size = _git_size(bare_repo, base_commit, path)
+            size = tree_entries.get(path)
             if size is None or size > max_file_bytes:
                 skipped_large += 1
                 continue
@@ -336,6 +336,20 @@ def _git_size(repo_path: Path, commit: str, path: str) -> int | None:
         return int(result.stdout.strip())
     except ValueError:
         return None
+
+
+def _git_tree_entries(repo_path: Path, commit: str) -> dict[str, int | None]:
+    entries: dict[str, int | None] = {}
+    for line in _git_lines(repo_path, ["ls-tree", "-r", "-l", commit]):
+        metadata, separator, path = line.partition("\t")
+        if not separator or not path:
+            continue
+        parts = metadata.split()
+        if len(parts) < 4:
+            continue
+        size_text = parts[3]
+        entries[path] = int(size_text) if size_text.isdigit() else None
+    return entries
 
 
 def _git_blob(repo_path: Path, commit: str, path: str) -> str:
