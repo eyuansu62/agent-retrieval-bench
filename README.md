@@ -1,39 +1,44 @@
 # Agent Retrieval Bench
 
-Agent Retrieval Bench is an action-oriented code retrieval benchmark for coding agents. The benchmark evaluates whether a retriever can find the repository files an agent would need for tasks such as mapping implementation changes to tests, resolving review comments, and following stack traces.
+Agent Retrieval Bench is an action-oriented code retrieval benchmark for coding agents. It evaluates whether a retriever can find the repository files an agent would need for real coding workflows.
 
-The current public release is **Benchmark V0.2**: 62 manually curated samples across `code2test`, `comment2context`, and `trace2code`. This repository is intended to be used as a benchmark/evaluation repo; raw crawling and dataset-construction workflows are intentionally not documented as the public path.
+The current public release candidate is **V1 Code Review RC**: 157 manually curated samples across `code2test` and `comment2context`.
 
-## V0.2 Contents
+Raw crawling, weak-label generation, and audit workflows are intentionally not documented as the public path. Use this repository to run evaluations against the released benchmark artifacts on Hugging Face.
 
-```text
-data/benchmark/v0_2/
-  manifest.json
-  samples.jsonl
-  code2test.jsonl
-  comment2context.jsonl
-  trace2code.jsonl
-data/corpus/v0_2/
-  corpus_manifest.jsonl
-  **/*.chunks.jsonl
-data/eval/v0_2/
-  lexical_summary.json
-  lexical_details.jsonl
-data/audit/v0_2/
-  keep_samples.jsonl
-```
+## Release Contents
 
-V0.2 intentionally excludes `testlog2code`: the audited cleaned slice had only 7 valid samples out of 44, so it is not reliable enough for this release. V0.2 upgrades `comment2context` to score only extra required context files instead of the commented file itself.
-
-The prebuilt V0.2 samples and corpus are hosted on Hugging Face Datasets:
+The prebuilt benchmark and corpus are hosted on Hugging Face Datasets:
 
 ```text
 https://huggingface.co/datasets/eyuansu71/agent_retrieval_bench
 ```
 
+```text
+data/benchmark/v1_code_review/
+  manifest.json
+  samples.jsonl
+  code2test.jsonl
+  comment2context.jsonl
+data/corpus/v1_code_review/
+  corpus_manifest.jsonl
+  **/*.chunks.jsonl
+data/eval/v1_code_review/
+  lexical_summary.json
+  lexical_details.jsonl
+  jina-code-embeddings-0.5b_summary.json
+  qwen3-embedding-4b_summary.json
+data/reports/v1_code_review/
+  model_leaderboard.md
+  model_leaderboard.json
+  status.md
+```
+
+V1 Code Review RC intentionally excludes `trace2code`. Full V1 will add trace/root-cause retrieval only after enough real stack-trace or CI-failure samples pass manual audit.
+
 ## Setup
 
-No runtime dependencies are required beyond Python 3.10+.
+Use Python 3.10+.
 
 ```bash
 python3 -m venv .venv
@@ -47,176 +52,124 @@ Install optional embedding dependencies only when running embedding model evalua
 pip install -e ".[embedding]"
 ```
 
-No GitHub API token is required to download, inspect, validate, or evaluate the public V0.2 benchmark.
+No GitHub API token is required to download, validate, or evaluate the released benchmark.
 
-## Evaluate V0.2
+## Download V1 Code Review
 
-Download the prebuilt V0.2 benchmark and candidate corpus from Hugging Face into the repo-local `data/` directory:
+Download the benchmark metadata and reports:
 
 ```bash
 hf download eyuansu71/agent_retrieval_bench \
   --repo-type dataset \
   --local-dir data \
-  --include "benchmark/v0_2/**" \
-  --include "corpus/v0_2/**" \
-  --include "eval/v0_2/**" \
-  --include "audit/v0_2/**" \
-  --include "audit/v0_2_round3_more/summary.json"
+  --include "benchmark/v1_code_review/**" \
+  --include "eval/v1_code_review/**" \
+  --include "reports/v1_code_review/**"
 ```
+
+Download and extract the prebuilt corpus archive:
+
+```bash
+hf download eyuansu71/agent_retrieval_bench \
+  --repo-type dataset \
+  --local-dir data \
+  --include "corpus/v1_code_review_corpus.tar.zst" \
+  --include "corpus/v1_code_review_corpus.tar.zst.sha256"
+
+cd data
+sha256sum -c corpus/v1_code_review_corpus.tar.zst.sha256
+rm -rf corpus/v1_code_review
+zstd -dc corpus/v1_code_review_corpus.tar.zst | tar -xf - -C corpus
+cd ..
+```
+
+If your `tar` prints `LIBARCHIVE.xattr.com.apple.provenance` warnings, they are macOS extended-attribute warnings and do not affect the extracted corpus.
+
+## Evaluate
 
 Validate the benchmark samples:
 
 ```bash
-arb validate data/benchmark/v0_2/*.jsonl
+arb validate data/benchmark/v1_code_review/*.jsonl
 ```
 
-Run the lexical/exact retrieval baseline:
+Run the lexical baseline:
 
 ```bash
 arb eval-baseline \
-  --derived data/benchmark/v0_2 \
-  --keep-list data/audit/v0_2/keep_samples.jsonl \
-  --corpus data/corpus/v0_2 \
-  --out data/eval/v0_2/lexical_summary.json
+  --derived data/benchmark/v1_code_review \
+  --corpus data/corpus/v1_code_review \
+  --out data/eval/v1_code_review/lexical_summary.json \
+  --details data/eval/v1_code_review/lexical_details.jsonl \
+  --no-keep-list
 ```
 
-Run an embedding model evaluation:
+Run Jina Code Embeddings:
 
 ```bash
 arb eval-embedding \
-  --model jinaai/jina-code-embeddings-0.5b \
-  --derived data/benchmark/v0_2 \
-  --keep-list data/audit/v0_2/keep_samples.jsonl \
-  --corpus data/corpus/v0_2 \
-  --candidate-filter code_only \
-  --out data/eval/v0_2/jina-code-embeddings-0.5b_code_only_summary.json
+  --model /path/to/jina-code-embeddings-0.5b \
+  --derived data/benchmark/v1_code_review \
+  --corpus data/corpus/v1_code_review \
+  --out data/eval/v1_code_review/jina-code-embeddings-0.5b_summary.json \
+  --details data/eval/v1_code_review/jina-code-embeddings-0.5b_details.jsonl \
+  --cache data/embeddings/v1_code_review/jina-code-embeddings-0.5b \
+  --candidate-filter all_files \
+  --batch-size 8 \
+  --device cuda \
+  --trust-remote-code \
+  --no-keep-list
 ```
 
-Embedding evaluation prints progress by default, including model loading, corpus loading, cache hits/misses, chunk encoding, and sample evaluation. Use `--no-progress` for quiet runs. The first run for a model can be slow because it embeds full base-commit corpora; later runs reuse `data/embeddings/v0_2/`.
+Run Qwen3 Embedding:
 
-Use `--candidate-filter tests_only` to isolate `code2test` behavior against test files, or `--candidate-filter code_only` to exclude docs/changelogs/templates from the candidate set. Details JSONL includes `gold_ranks` for each gold file, with `null` when the gold file is not retrieved.
+```bash
+arb eval-embedding \
+  --model /path/to/Qwen3-Embedding-4B \
+  --derived data/benchmark/v1_code_review \
+  --corpus data/corpus/v1_code_review \
+  --out data/eval/v1_code_review/qwen3-embedding-4b_summary.json \
+  --details data/eval/v1_code_review/qwen3-embedding-4b_details.jsonl \
+  --cache data/embeddings/v1_code_review/qwen3-embedding-4b \
+  --candidate-filter all_files \
+  --batch-size 8 \
+  --device cuda \
+  --trust-remote-code \
+  --no-keep-list
+```
 
-Generate a model leaderboard from all `*_summary.json` files in `data/eval/v0_2/`:
+Generate a leaderboard from all `*_summary.json` files:
 
 ```bash
 arb report-models \
-  --eval-dir data/eval/v0_2 \
-  --out data/reports/v0_2/model_leaderboard.md \
-  --json-out data/reports/v0_2/model_leaderboard.json
+  --eval-dir data/eval/v1_code_review \
+  --out data/reports/v1_code_review/model_leaderboard.md \
+  --json-out data/reports/v1_code_review/model_leaderboard.json
 ```
 
-Regenerate the diagnostic report:
+The default candidate set is `all_files`. The primary metric is overall `MRR`; report `Recall@5`, `Recall@10`, `Recall@20`, and `gold_coverage@8k` alongside it.
 
-```bash
-arb diagnose \
-  --samples data/benchmark/v0_2/samples.jsonl \
-  --corpus-manifest data/corpus/v0_2/corpus_manifest.jsonl \
-  --details data/eval/v0_2/lexical_details.jsonl \
-  --out data/reports/v0_2
-```
+## Current Leaderboard
 
-Generate a V1 hard-mining report and candidate pool:
+All runs evaluate 157 samples with `skipped={}`.
 
-```bash
-arb hardness \
-  --derived data/benchmark/v0_2 \
-  --corpus-manifest data/corpus/v0_2/corpus_manifest.jsonl \
-  --details data/eval/v0_2/lexical_details.jsonl \
-  --keep-list data/audit/v0_2/keep_samples.jsonl \
-  --out data/reports/v0_2 \
-  --pool-out data/reports/v0_2/candidate_keep_pool.jsonl
-```
-
-`arb hardness` annotates each sample with direct path hints, basename hints, module-token overlap, same-directory gold, lexical rank bucket, gold count, and task-balance weight. The generated `candidate_keep_pool.jsonl` sorts hard candidates first for V1 manual audit; V0.2 remains frozen.
-
-Filter the hard candidate pool into a V1 seed set:
-
-```bash
-arb hard-pool-filter \
-  --pool data/reports/v0_2/candidate_keep_pool.jsonl \
-  --audit data/reports/v0_2/top_hard_first_pass_audit.jsonl \
-  --out data/reports/v0_2/v1_seed_candidates.jsonl \
-  --summary data/reports/v0_2/v1_seed_summary.json \
-  --audit-out data/reports/v0_2/v1_seed_audit_samples.jsonl \
-  --audit-csv data/reports/v0_2/v1_seed_audit_samples.csv
-```
-
-`arb hard-pool-filter` deduplicates by repo, PR, and gold files; applies manual audit verdicts; drops obvious generated/template/generic-test noise; and writes the next V1 seed audit sheet.
-
-Summarize a V1 seed audit sheet and write a keep list:
-
-```bash
-arb seed-audit-summary \
-  data/reports/v0_2/v1_seed_audit_samples.csv \
-  --out data/reports/v0_2/v1_seed_audit_summary.json \
-  --keep-list data/reports/v0_2/v1_seed_keep.jsonl
-```
-
-Merge multiple V1 seed audit rounds into one freeze-gate keep list:
-
-```bash
-arb merge-seed-audits \
-  --audit data/reports/v1_candidate_round1/v1_seed_audit_samples.csv \
-  --audit data/reports/v1_candidate_round2/v1_seed_audit_samples.csv \
-  --out data/reports/v1_seed_round1/audit_summary.json \
-  --keep-list data/reports/v1_seed_round1/keep_samples.jsonl
-```
-
-`arb merge-seed-audits` accepts CSV and JSONL inputs, deduplicates repeated sample IDs, fails closed on conflicting verdicts, and keeps only `valid` rows explicitly marked `keep=true`.
-
-Merge existing local benchmark/derived samples into a V1 hard-mining candidate set without crawling new repos:
-
-```bash
-arb export-hardmine-candidates \
-  --corpus-manifest data/corpus/v0_2/corpus_manifest.jsonl \
-  --require-corpus \
-  --out data/benchmark/v1_candidate_round1
-```
-
-`arb export-hardmine-candidates` scans `data/benchmark/v0_2`, `data/derived_v0_2*`, and `data/derived_token_logs` by default; keeps only `code2test`, `comment2context`, and real `trace2code`; deduplicates by `sample_id`; drops leaked, schema-invalid, missing-gold, and missing-corpus samples; and writes both `samples.jsonl` and per-task JSONL files.
-
-Compare a curated V1 seed against V0.2 and its audit summary:
-
-```bash
-arb report-v1-seed \
-  --audit-summary data/reports/v1_candidate_round1/v1_seed_audit_summary.json \
-  --out data/reports/v1_candidate_round1/v1_seed_comparison.md \
-  --json-out data/reports/v1_candidate_round1/v1_seed_comparison.json
-```
-
-If the first audit is short, generate a second review batch from the remaining hard pool:
-
-```bash
-arb hard-pool-filter \
-  --pool data/reports/v1_candidate_round1/candidate_keep_pool.jsonl \
-  --audit data/reports/v1_candidate_round1/v1_seed_audit_samples.csv \
-  --exclude-audited \
-  --task-priority code2test,trace2code,comment2context \
-  --out data/reports/v1_candidate_round2/v1_seed_candidates.jsonl \
-  --summary data/reports/v1_candidate_round2/v1_seed_summary.json \
-  --audit-out data/reports/v1_candidate_round2/v1_seed_audit_samples.jsonl \
-  --audit-csv data/reports/v1_candidate_round2/v1_seed_audit_samples.csv
-```
-
-## Current Lexical Baseline
-
-The published V0.2 lexical baseline evaluates all 62 samples with no skipped samples.
-
-| Task | Samples | Recall@5 | Recall@10 | Recall@20 | MRR | gold_coverage@8k |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| `code2test` | 17 | 0.2353 | 0.2941 | 0.3676 | 0.1418 | 0.1176 |
-| `comment2context` | 43 | 0.4535 | 0.6512 | 0.8721 | 0.2482 | 0.1512 |
-| `trace2code` | 2 | 1.0000 | 1.0000 | 1.0000 | 0.7500 | 1.0000 |
-| `overall` | 62 | 0.4113 | 0.5645 | 0.7379 | 0.2352 | 0.1694 |
-
-V0.1 remains available as a legacy 35-sample artifact under `data/benchmark/v0_1/`. New model comparisons should report V0.2 as the primary benchmark.
+| Task | Model | Samples | Recall@5 | Recall@10 | Recall@20 | MRR | gold_coverage@8k |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| overall | Qwen3-Embedding-4B | 157 | 0.3877 | 0.5344 | 0.6749 | 0.3179 | 0.3389 |
+| overall | jina-code-embeddings-0.5b | 157 | 0.3025 | 0.4023 | 0.5227 | 0.2441 | 0.2176 |
+| overall | lexical | 157 | 0.1083 | 0.2113 | 0.3535 | 0.1013 | 0.0456 |
+| code2test | Qwen3-Embedding-4B | 106 | 0.4531 | 0.5965 | 0.7292 | 0.3182 | 0.3840 |
+| code2test | jina-code-embeddings-0.5b | 106 | 0.2752 | 0.4009 | 0.5211 | 0.2038 | 0.2060 |
+| code2test | lexical | 106 | 0.0676 | 0.1399 | 0.2469 | 0.0663 | 0.0299 |
+| comment2context | jina-code-embeddings-0.5b | 51 | 0.3595 | 0.4052 | 0.5261 | 0.3280 | 0.2418 |
+| comment2context | Qwen3-Embedding-4B | 51 | 0.2516 | 0.4052 | 0.5621 | 0.3173 | 0.2451 |
+| comment2context | lexical | 51 | 0.1928 | 0.3595 | 0.5752 | 0.1739 | 0.0784 |
 
 ## Benchmark Semantics
 
-- Every sample is evaluated against `repo_at_base_commit`; fixed code must not be indexed.
-- `code2test` gold files are related tests.
-- V0.1 `comment2context` gold files are root-cause files when available, otherwise related tests.
-- V0.2+ `comment2context` treats the commented file as `gold.given_files` and scores only extra required context from `gold.must_context_files` / `gold.context_files`.
-- `trace2code` gold files are root-cause files when available, otherwise related tests.
-- Baseline queries fail closed if raw patch markers or fix commit hashes appear in the query.
-- Large generated artifacts such as `data/repos/` and `data/corpus/` are local evaluation caches and are ignored by git.
+- Every sample is evaluated against `repo_at_base_commit`; fixed code is not indexed.
+- `code2test` queries describe implementation changes or PR intent; gold files are related tests.
+- `comment2context` queries describe review comments; the commented file is treated as given context, and scoring uses only additional required context files.
+- `gold_coverage@8k` measures whether gold files appear within an 8k-character retrieval budget.
+
+Legacy V0.2 remains available under `data/benchmark/v0_2/`, but new model comparisons should report V1 Code Review RC as the primary benchmark.
