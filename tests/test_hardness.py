@@ -319,6 +319,7 @@ class HardnessTests(unittest.TestCase):
                         "valid-without-keep,code2test,o/r,q,g,valid,,,",
                         "too-easy,comment2context,o/r,q,g,too_easy,,false,",
                         "duplicate,comment2context,o/r,q,g,duplicate,,false,",
+                        "not-root,trace2code,o/r,q,g,not_root_cause,,false,",
                         "pending,trace2code,o/r,q,g,,,,",
                     ]
                 )
@@ -329,12 +330,13 @@ class HardnessTests(unittest.TestCase):
             summary = summarize_seed_audit(audit_path, out_path, keep_list)
             kept = [json.loads(line) for line in keep_list.read_text().splitlines()]
 
-            self.assertEqual(summary["total"], 5)
+            self.assertEqual(summary["total"], 6)
             self.assertEqual(summary["kept"], 1)
-            self.assertEqual(summary["dropped"], 2)
+            self.assertEqual(summary["dropped"], 3)
             self.assertEqual(summary["pending"], 2)
             self.assertEqual(summary["verdicts"]["too_easy"], 1)
             self.assertEqual(summary["verdicts"]["duplicate"], 1)
+            self.assertEqual(summary["verdicts"]["not_root_cause"], 1)
             self.assertEqual(summary["kept_by_task"], {"code2test": 1})
             self.assertEqual(kept[0]["sample_id"], "valid-code")
             self.assertTrue(kept[0]["keep"])

@@ -11,7 +11,7 @@ from .clone import verify_base_commits
 from .code2test_pr import mine_code2test_prs
 from .corpus import build_candidate_corpus, sample_paths_from_derived
 from .curate import export_curated_samples
-from .crawler import crawl_commit_details_for_raw, crawl_repo, write_manifest
+from .crawler import crawl_commit_details_for_raw, crawl_pr_checks, crawl_repo, write_manifest
 from .derive import derive_repo
 from .diagnostics import diagnose_benchmark
 from .embedding_eval import (
@@ -27,7 +27,8 @@ from .logs import crawl_job_logs
 from .model_report import report_model_leaderboard
 from .quality import validate_samples
 from .seed_report import report_v1_seed
-from .trace_preflight import trace_preflight
+from .trace_preflight import mine_trace2code, trace_debug_drops, trace_debug_summary, trace_preflight, trace_source_scan
+from .trace_repro import mine_trace_repro_runs, run_trace_repro, trace_repro_source
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -57,6 +58,18 @@ def main(argv: list[str] | None = None) -> int:
     crawl_all.add_argument("--max-changed-files", type=int, default=20)
     crawl_all.add_argument("--no-checks", action="store_true")
     crawl_all.add_argument("--dry-run", action="store_true")
+
+    crawl_checks = subparsers.add_parser("crawl-pr-checks", help="Backfill PR files, commits, commit details, and check runs for trace mining.")
+    crawl_checks.add_argument("--repo", action="append", required=True, help="Repo to process. Can be repeated.")
+    crawl_checks.add_argument("--raw", type=Path, default=Path("data/raw_token"))
+    crawl_checks.add_argument("--limit-prs", type=int, default=300)
+    crawl_checks.add_argument("--page-size", type=int, default=50)
+    crawl_checks.add_argument("--max-changed-files", type=int, default=30)
+    crawl_checks.add_argument("--include-review-comments", action="store_true")
+    crawl_checks.add_argument("--refresh-existing-checks", action="store_true")
+    crawl_checks.add_argument("--repair-empty-state", action="store_true")
+    crawl_checks.add_argument("--max-pages", type=int, help="Maximum GraphQL pages to scan for this run.")
+    crawl_checks.add_argument("--dry-run", action="store_true")
 
     derive = subparsers.add_parser("derive", help="Build weak benchmark samples from raw JSONL.")
     derive.add_argument("--raw", type=Path, default=Path("data/raw"))
@@ -96,6 +109,67 @@ def main(argv: list[str] | None = None) -> int:
     trace_pref.add_argument("--out", type=Path, default=Path("data/reports/v1_trace_preflight"))
     trace_pref.add_argument("--repo", action="append", help="Repo to process. Defaults to raw dirs.")
     trace_pref.add_argument("--max-changed-files", type=int, default=20)
+
+    mine_trace = subparsers.add_parser("mine-trace2code", help="Mine strict trace2code benchmark candidates from raw CI/check/review signals.")
+    mine_trace.add_argument("--raw", type=Path, default=Path("data/raw_token"))
+    mine_trace.add_argument("--out", type=Path, default=Path("data/benchmark/v1_trace_candidate_round1"))
+    mine_trace.add_argument("--report-out", type=Path, default=Path("data/reports/v1_trace_candidate_round1"))
+    mine_trace.add_argument("--repo", action="append", help="Repo to process. Defaults to raw dirs.")
+    mine_trace.add_argument("--max-changed-files", type=int, default=20)
+    mine_trace.add_argument("--audit-limit", type=int, default=120)
+    mine_trace.add_argument("--limit-samples", type=int)
+    mine_trace.add_argument("--no-review-comments", action="store_true", help="Only mine CI/check signals; skip review comment snippets.")
+
+    trace_debug = subparsers.add_parser("trace-debug-drops", help="Sample weak CI/check trace signals that were dropped by the strict trace miner.")
+    trace_debug.add_argument("--raw", type=Path, default=Path("data/raw_token"))
+    trace_debug.add_argument("--out", type=Path, default=Path("data/reports/v1_trace_debug"))
+    trace_debug.add_argument("--repo", action="append", help="Repo to process. Defaults to raw dirs.")
+    trace_debug.add_argument("--max-changed-files", type=int, default=20)
+    trace_debug.add_argument("--audit-limit", type=int, default=120)
+
+    trace_debug_summary_parser = subparsers.add_parser("trace-debug-summary", help="Summarize audited weak trace signals and export recoverable rows.")
+    trace_debug_summary_parser.add_argument("audit", type=Path)
+    trace_debug_summary_parser.add_argument("--out", type=Path, default=Path("data/reports/v1_trace_debug/audit_summary.json"))
+    trace_debug_summary_parser.add_argument("--recoverable-out", type=Path, default=Path("data/reports/v1_trace_debug/recoverable_signals.jsonl"))
+
+    trace_source = subparsers.add_parser("trace-source-scan", help="Rank CI/check log sources by likelihood of yielding real trace2code samples.")
+    trace_source.add_argument("--raw", type=Path, default=Path("data/raw_token"))
+    trace_source.add_argument("--out", type=Path, default=Path("data/reports/v1_trace_source_round1"))
+    trace_source.add_argument("--repo", action="append", help="Repo to process. Defaults to raw dirs.")
+    trace_source.add_argument("--max-changed-files", type=int, default=20)
+    trace_source.add_argument("--audit-limit", type=int, default=50)
+    trace_source.add_argument("--min-score", type=int, default=4)
+
+    trace_repro = subparsers.add_parser("trace-repro-source", help="Build local test-reproduction source candidates for trace2code.")
+    trace_repro.add_argument("--raw", type=Path, default=Path("data/raw_token"))
+    trace_repro.add_argument("--out", type=Path, default=Path("data/reports/v1_trace_repro_source_round1"))
+    trace_repro.add_argument("--repo", action="append", help="Repo to process. Defaults to raw dirs.")
+    trace_repro.add_argument("--max-changed-files", type=int, default=30)
+    trace_repro.add_argument("--max-source-files", type=int, default=5)
+    trace_repro.add_argument("--max-test-files", type=int, default=5)
+    trace_repro.add_argument("--min-score", type=int, default=5)
+    trace_repro.add_argument("--audit-limit", type=int, default=120)
+    trace_repro.add_argument("--limit-candidates", type=int)
+
+    run_repro = subparsers.add_parser("run-trace-repro", help="Checkout base commits, apply test-only patches, and run focused repro commands.")
+    run_repro.add_argument("--candidate", type=Path, default=Path("data/reports/v1_trace_repro_source_round1/repro_candidates.jsonl"))
+    run_repro.add_argument("--id", action="append", dest="candidate_id", help="Candidate id to run. Can be repeated.")
+    run_repro.add_argument("--raw", type=Path, default=Path("data/raw_token"))
+    run_repro.add_argument("--repos-dir", type=Path, default=Path("data/repro_worktrees"))
+    run_repro.add_argument("--out", type=Path, default=Path("data/reports/v1_trace_repro_runs"))
+    run_repro.add_argument("--limit", type=int, default=1, help="Number of candidates to run when --id is not provided.")
+    run_repro.add_argument("--timeout-seconds", type=int, default=900)
+    run_repro.add_argument("--repo-url-template", default="https://github.com/{repo}.git")
+    run_repro.add_argument("--dry-run", action="store_true")
+    run_repro.add_argument("--continue-on-error", action="store_true")
+
+    mine_repro_runs = subparsers.add_parser("mine-trace-repro-runs", help="Convert executed local repro failures into trace2code audit candidates.")
+    mine_repro_runs.add_argument("--candidates", type=Path, default=Path("data/reports/v1_trace_repro_source_round1/repro_candidates.jsonl"))
+    mine_repro_runs.add_argument("--runs", type=Path, default=Path("data/reports/v1_trace_repro_runs/runs.jsonl"))
+    mine_repro_runs.add_argument("--out", type=Path, default=Path("data/benchmark/v1_trace_repro_candidate_round1"))
+    mine_repro_runs.add_argument("--report-out", type=Path, default=Path("data/reports/v1_trace_repro_candidate_round1"))
+    mine_repro_runs.add_argument("--max-root-files", type=int, default=3)
+    mine_repro_runs.add_argument("--audit-limit", type=int, default=120)
 
     validate = subparsers.add_parser("validate", help="Validate derived sample JSONL files.")
     validate.add_argument("samples", nargs="+", type=Path)
@@ -137,7 +211,8 @@ def main(argv: list[str] | None = None) -> int:
     logs = subparsers.add_parser("crawl-logs", help="Download GitHub Actions job logs for failed check runs.")
     logs.add_argument("--raw", type=Path, default=Path("data/raw"))
     logs.add_argument("--repo", action="append", help="Repo to process. Defaults to raw dirs.")
-    logs.add_argument("--max-jobs", type=int, default=25)
+    logs.add_argument("--max-jobs", type=int, help="Legacy cap on candidate jobs considered per repo.")
+    logs.add_argument("--max-new-jobs", type=int, default=25, help="Maximum newly downloaded job logs per repo; existing logs do not consume this budget.")
     logs.add_argument("--max-bytes", type=int, default=2_000_000)
     logs.add_argument(
         "--conclusions",
@@ -306,6 +381,25 @@ def main(argv: list[str] | None = None) -> int:
             )
         print(json.dumps(summaries, indent=2, ensure_ascii=False))
         return 0
+    if args.command == "crawl-pr-checks":
+        summaries = [
+            crawl_pr_checks(
+                api,
+                repo,
+                args.raw,
+                limit_prs=args.limit_prs,
+                page_size=args.page_size,
+                max_changed_files=args.max_changed_files,
+                include_review_comments=args.include_review_comments,
+                refresh_existing_checks=args.refresh_existing_checks,
+                repair_empty_state=args.repair_empty_state,
+                max_pages=args.max_pages,
+                dry_run=args.dry_run,
+            )
+            for repo in args.repo
+        ]
+        print(json.dumps(summaries, indent=2, ensure_ascii=False))
+        return 1 if any(item["errors"] for item in summaries) else 0
     if args.command == "derive":
         repos = args.repo or _repos_from_raw(args.raw)
         result = {repo: derive_repo(args.raw, repo, args.out, args.max_changed_files) for repo in repos}
@@ -351,6 +445,84 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(json.dumps(result, indent=2, ensure_ascii=False))
         return 0
+    if args.command == "mine-trace2code":
+        result = mine_trace2code(
+            raw_dir=args.raw,
+            out_dir=args.out,
+            report_dir=args.report_out,
+            repos=args.repo,
+            max_changed_files=args.max_changed_files,
+            audit_limit=args.audit_limit,
+            include_review_comments=not args.no_review_comments,
+            limit_samples=args.limit_samples,
+        )
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return 0
+    if args.command == "trace-debug-drops":
+        result = trace_debug_drops(
+            raw_dir=args.raw,
+            out_dir=args.out,
+            repos=args.repo,
+            max_changed_files=args.max_changed_files,
+            audit_limit=args.audit_limit,
+        )
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return 0
+    if args.command == "trace-debug-summary":
+        result = trace_debug_summary(args.audit, out_path=args.out, recoverable_out=args.recoverable_out)
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return 1 if result["pending"] or result["invalid_verdicts"] else 0
+    if args.command == "trace-source-scan":
+        result = trace_source_scan(
+            raw_dir=args.raw,
+            out_dir=args.out,
+            repos=args.repo,
+            max_changed_files=args.max_changed_files,
+            audit_limit=args.audit_limit,
+            min_score=args.min_score,
+        )
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return 0
+    if args.command == "trace-repro-source":
+        result = trace_repro_source(
+            raw_dir=args.raw,
+            out_dir=args.out,
+            repos=args.repo,
+            max_changed_files=args.max_changed_files,
+            max_source_files=args.max_source_files,
+            max_test_files=args.max_test_files,
+            min_score=args.min_score,
+            audit_limit=args.audit_limit,
+            limit_candidates=args.limit_candidates,
+        )
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return 0
+    if args.command == "run-trace-repro":
+        result = run_trace_repro(
+            candidate_path=args.candidate,
+            raw_dir=args.raw,
+            repos_dir=args.repos_dir,
+            out_dir=args.out,
+            candidate_ids=args.candidate_id,
+            limit=args.limit,
+            timeout_seconds=args.timeout_seconds,
+            repo_url_template=args.repo_url_template,
+            dry_run=args.dry_run,
+            continue_on_error=args.continue_on_error,
+        )
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return 1 if result["status_counts"].get("checkout_failed") or result["status_counts"].get("patch_failed") else 0
+    if args.command == "mine-trace-repro-runs":
+        result = mine_trace_repro_runs(
+            candidates_path=args.candidates,
+            runs_path=args.runs,
+            out_dir=args.out,
+            report_dir=args.report_out,
+            max_root_files=args.max_root_files,
+            audit_limit=args.audit_limit,
+        )
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return 0
     if args.command == "validate":
         result = [validate_samples(path) for path in args.samples]
         print(json.dumps(result, indent=2, ensure_ascii=False))
@@ -387,7 +559,15 @@ def main(argv: list[str] | None = None) -> int:
         repos = args.repo or _repos_from_raw(args.raw)
         conclusions = {item.strip() for item in args.conclusions.split(",") if item.strip()}
         result = [
-            crawl_job_logs(api, args.raw, repo, max_jobs=args.max_jobs, max_bytes=args.max_bytes, conclusions=conclusions)
+            crawl_job_logs(
+                api,
+                args.raw,
+                repo,
+                max_jobs=args.max_jobs,
+                max_new_jobs=args.max_new_jobs,
+                max_bytes=args.max_bytes,
+                conclusions=conclusions,
+            )
             for repo in repos
         ]
         print(json.dumps(result, indent=2, ensure_ascii=False))

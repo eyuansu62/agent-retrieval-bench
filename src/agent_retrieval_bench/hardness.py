@@ -15,7 +15,7 @@ from .io import ensure_parent, read_jsonl, truncate_text, utc_now, write_json
 METRIC_KEYS = ("Recall@5", "Recall@10", "Recall@20", "MRR", "gold_coverage@8k")
 V1_TARGET_COUNTS = {"code2test": 150, "comment2context": 150, "trace2code": 50}
 SEED_AUDIT_FIELDS = ("sample_id", "task_type", "repo", "query_excerpt", "gold_files", "verdict", "reason", "keep", "notes")
-DROP_AUDIT_VERDICTS = {"ambiguous", "duplicate", "leaked", "noisy", "too_easy"}
+DROP_AUDIT_VERDICTS = {"ambiguous", "duplicate", "leaked", "noisy", "not_root_cause", "too_easy"}
 KEEP_AUDIT_VERDICTS = {"valid"}
 SEED_AUDIT_VERDICTS = KEEP_AUDIT_VERDICTS | DROP_AUDIT_VERDICTS
 GENERIC_MODULE_TOKENS = {

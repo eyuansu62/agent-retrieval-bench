@@ -5,42 +5,52 @@ import re
 from pathlib import Path
 from typing import Any
 
+from .filters import is_ignored_check_signal
 from .github_api import GitHubAPI
-from .io import append_jsonl, ensure_parent, read_jsonl, repo_slug, stable_id, truncate_text, utc_now
+from .io import ensure_parent, read_jsonl, repo_slug, truncate_text, utc_now
 
 DEFAULT_FAILURE_CONCLUSIONS = {"failure", "timed_out", "action_required"}
+CONCLUSION_PRIORITY = {"failure": 0, "timed_out": 1, "action_required": 2, "cancelled": 3}
 ERROR_HINT_RE = re.compile(
     r"(traceback|error:|failed|failure|panic|exception|assertion|expected|received|FAIL|FAILED|Caused by|stack backtrace)",
     re.IGNORECASE,
 )
+TEST_JOB_RE = re.compile(r"\b(test|tests|pytest|unit|integration|e2e|vitest|junit|cargo test|go test)\b", re.IGNORECASE)
 
 
 def crawl_job_logs(
     api: GitHubAPI,
     raw_dir: Path,
     repo: str,
-    max_jobs: int = 25,
+    max_jobs: int | None = None,
+    max_new_jobs: int = 25,
     max_bytes: int = 2_000_000,
     conclusions: set[str] | None = None,
 ) -> dict[str, Any]:
     conclusions = conclusions or DEFAULT_FAILURE_CONCLUSIONS
     owner, name = repo.split("/", 1)
     repo_dir = raw_dir / repo_slug(repo)
+    metadata_path = repo_dir / "job_logs.jsonl"
+    existing_records = dedupe_job_log_records(read_jsonl(metadata_path))
     records = _candidate_jobs(repo_dir, conclusions)
-    downloaded = 0
+    considered = 0
+    new_downloaded = 0
     skipped_existing = 0
     errors = 0
     metadata_records: list[dict[str, Any]] = []
+    last_rate_limit: dict[str, str | None] = {}
     for record in records:
-        if downloaded >= max_jobs:
+        if max_jobs is not None and considered >= max_jobs:
             break
+        if new_downloaded >= max_new_jobs:
+            break
+        considered += 1
         job_id = record["job_id"]
         log_relpath = Path("job_logs") / f"{job_id}.txt"
         log_path = repo_dir / log_relpath
         if log_path.exists():
             skipped_existing += 1
             metadata_records.append(_metadata_from_existing(record, log_relpath, log_path, max_bytes))
-            downloaded += 1
             continue
         try:
             response = api.get_bytes(
@@ -48,14 +58,15 @@ def crawl_job_logs(
                 accept="application/vnd.github+json",
                 max_bytes=max_bytes,
             )
+            last_rate_limit = rate_limit_from_headers(response.headers)
             truncated = len(response.body) > max_bytes
             body = response.body[:max_bytes]
             text = body.decode("utf-8", errors="replace")
             ensure_parent(log_path)
             log_path.write_text(text, encoding="utf-8")
             metadata_records.append(_metadata_from_text(record, log_relpath, text, truncated, response.headers))
-            downloaded += 1
-        except RuntimeError as error:
+            new_downloaded += 1
+        except Exception as error:
             errors += 1
             metadata_records.append(
                 {
@@ -65,15 +76,21 @@ def crawl_job_logs(
                     "error": str(error),
                 }
             )
+            new_downloaded += 1
     if metadata_records:
-        append_jsonl(repo_dir / "job_logs.jsonl", metadata_records)
+        write_jsonl(metadata_path, dedupe_job_log_records([*existing_records, *metadata_records]))
     return {
         "repo": repo,
+        "candidate_jobs": len(records),
         "candidates": len(records),
-        "downloaded_or_existing": downloaded,
+        "considered": considered,
+        "new_downloaded": new_downloaded,
+        "downloaded_or_existing": new_downloaded + skipped_existing,
         "skipped_existing": skipped_existing,
+        "existing_skipped": skipped_existing,
         "errors": errors,
-        "metadata_path": str(repo_dir / "job_logs.jsonl"),
+        "rate_limit": last_rate_limit,
+        "metadata_path": str(metadata_path),
     }
 
 
@@ -90,6 +107,8 @@ def _candidate_jobs(repo_dir: Path, conclusions: set[str]) -> list[dict[str, Any
                 continue
             if run.get("conclusion") not in conclusions:
                 continue
+            if is_ignored_check_signal(run.get("name"), json.dumps(run.get("output") or {}, ensure_ascii=False)):
+                continue
             seen.add(job_id)
             candidates.append(
                 {
@@ -104,7 +123,42 @@ def _candidate_jobs(repo_dir: Path, conclusions: set[str]) -> list[dict[str, Any
                     "details_url": run.get("details_url"),
                 }
             )
-    return candidates
+    return sorted(candidates, key=job_sort_key)
+
+
+def job_sort_key(record: dict[str, Any]) -> tuple[Any, ...]:
+    name = str(record.get("check_name") or "")
+    return (
+        CONCLUSION_PRIORITY.get(str(record.get("conclusion")), 99),
+        0 if TEST_JOB_RE.search(name) else 1,
+        str(record.get("repo") or ""),
+        int(record.get("pr_number") or 0) * -1,
+        int(record.get("job_id") or 0) * -1,
+    )
+
+
+def dedupe_job_log_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    by_job: dict[int, dict[str, Any]] = {}
+    order: list[int] = []
+    for record in records:
+        job_id = record.get("job_id")
+        if job_id is None:
+            continue
+        job_id = int(job_id)
+        if job_id not in by_job:
+            order.append(job_id)
+        by_job[job_id] = preferred_job_record(by_job.get(job_id), record)
+    return [by_job[job_id] for job_id in order]
+
+
+def preferred_job_record(existing: dict[str, Any] | None, new: dict[str, Any]) -> dict[str, Any]:
+    if existing is None:
+        return new
+    if existing.get("type") == "job_log_error" and new.get("type") == "job_log":
+        return new
+    if existing.get("type") == "job_log" and new.get("type") == "job_log_error":
+        return existing
+    return new
 
 
 def _metadata_from_existing(record: dict[str, Any], log_relpath: Path, log_path: Path, max_bytes: int) -> dict[str, Any]:
@@ -129,6 +183,24 @@ def _metadata_from_text(
         "content_type": headers.get("content-type"),
         "excerpt": _failure_excerpt(text),
     }
+
+
+def rate_limit_from_headers(headers: dict[str, str]) -> dict[str, str | None]:
+    return {
+        "limit": headers.get("x-ratelimit-limit"),
+        "remaining": headers.get("x-ratelimit-remaining"),
+        "reset": headers.get("x-ratelimit-reset"),
+        "used": headers.get("x-ratelimit-used"),
+        "resource": headers.get("x-ratelimit-resource"),
+    }
+
+
+def write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
+    ensure_parent(path)
+    with path.open("w", encoding="utf-8") as handle:
+        for row in rows:
+            handle.write(json.dumps(row, ensure_ascii=False, sort_keys=True))
+            handle.write("\n")
 
 
 def _failure_excerpt(text: str, max_lines: int = 80, window: int = 8) -> str:
