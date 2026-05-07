@@ -26,6 +26,7 @@ from .io import load_targets, read_jsonl, repo_slug
 from .logs import crawl_job_logs
 from .model_report import report_model_leaderboard
 from .quality import validate_samples
+from .release import DEFAULT_DATASET_REPO, download_benchmark_release
 from .seed_report import report_v1_seed
 from .trace_preflight import mine_trace2code, trace_debug_drops, trace_debug_summary, trace_preflight, trace_source_scan
 from .trace_repro import mine_trace_repro_runs, run_trace_repro, trace_repro_source
@@ -40,6 +41,19 @@ def main(argv: list[str] | None = None) -> int:
     manifest = subparsers.add_parser("manifest", help="Write repo_manifest.jsonl for configured targets.")
     manifest.add_argument("--targets", type=Path, default=Path("configs/crawl_targets.json"))
     manifest.add_argument("--output", type=Path, default=Path("data/repo_manifest.jsonl"))
+
+    download_release = subparsers.add_parser("download-benchmark", help="Download, verify, and extract a released benchmark bundle from Hugging Face.")
+    download_release.add_argument("--version", default="v1")
+    download_release.add_argument("--repo-id", default=DEFAULT_DATASET_REPO)
+    download_release.add_argument("--revision")
+    download_release.add_argument("--local-dir", type=Path, default=Path("data"))
+    download_release.add_argument("--hf-token", help="Hugging Face token. Defaults to HF_TOKEN or stored hf auth.")
+    download_release.add_argument("--skip-download", action="store_true", help="Use an already downloaded release bundle.")
+    download_release.add_argument("--no-extract", action="store_true", help="Only download and verify the archive.")
+    download_release.add_argument("--force", action="store_true", help="Replace existing benchmark/corpus/eval/report directories for this version.")
+    download_release.add_argument("--hf-bin", default="hf")
+    download_release.add_argument("--zstd-bin", default="zstd")
+    download_release.add_argument("--tar-bin", default="tar")
 
     crawl = subparsers.add_parser("crawl", help="Crawl one GitHub repo.")
     crawl.add_argument("--repo", required=True)
@@ -349,6 +363,22 @@ def main(argv: list[str] | None = None) -> int:
         targets = load_targets(args.targets)["primary"]
         count = write_manifest(api, targets, args.output)
         print(json.dumps({"wrote": count, "output": str(args.output), "authenticated": api.authenticated}, indent=2))
+        return 0
+    if args.command == "download-benchmark":
+        result = download_benchmark_release(
+            version=args.version,
+            repo_id=args.repo_id,
+            revision=args.revision,
+            local_dir=args.local_dir,
+            hf_token=args.hf_token,
+            skip_download=args.skip_download,
+            no_extract=args.no_extract,
+            force=args.force,
+            hf_bin=args.hf_bin,
+            zstd_bin=args.zstd_bin,
+            tar_bin=args.tar_bin,
+        )
+        print(json.dumps(result, indent=2, ensure_ascii=False))
         return 0
     if args.command == "crawl":
         summary = crawl_repo(

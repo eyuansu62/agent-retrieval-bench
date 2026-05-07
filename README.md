@@ -58,18 +58,22 @@ No GitHub API token is required to download, validate, or evaluate the released 
 
 ## Download V1
 
-Download the single-file V1 release bundle:
+Download, verify, and extract the single-file V1 release bundle:
+
+```bash
+arb download-benchmark --version v1 --local-dir data --force
+```
+
+This creates `data/benchmark/v1`, `data/corpus/v1`, `data/eval/v1`, and `data/reports/v1`. The command wraps the Hugging Face download, checksum verification, and extraction steps. If the dataset is private or gated, authenticate first with `hf auth login` or set `HF_TOKEN`.
+
+Equivalent manual commands:
 
 ```bash
 hf download eyuansu71/agent_retrieval_bench \
   --repo-type dataset \
   --local-dir data \
   --include "releases/v1/*"
-```
 
-Verify and extract it:
-
-```bash
 cd data
 sha256sum -c releases/v1/agent_retrieval_bench_v1.tar.zst.sha256
 rm -rf benchmark/v1 corpus/v1 eval/v1 reports/v1
@@ -77,7 +81,7 @@ zstd -dc releases/v1/agent_retrieval_bench_v1.tar.zst | tar -xf - -C .
 cd ..
 ```
 
-The bundle contains `benchmark/v1`, `corpus/v1`, `eval/v1`, and `reports/v1`. If your `tar` prints `LIBARCHIVE.xattr.com.apple.provenance` warnings, they are macOS extended-attribute warnings and do not affect the extracted files.
+If your `tar` prints `LIBARCHIVE.xattr.com.apple.provenance` warnings during manual extraction, they are macOS extended-attribute warnings and do not affect the extracted files.
 
 ## Evaluate
 
