@@ -102,6 +102,18 @@ arb eval-baseline \
   --no-keep-list
 ```
 
+Run the deterministic Aider-style RepoMap baseline:
+
+```bash
+arb eval-repomap \
+  --derived data/benchmark/v1 \
+  --corpus data/corpus/v1 \
+  --out data/eval/v1/repomap_summary.json \
+  --details data/eval/v1/repomap_details.jsonl \
+  --candidate-filter all_files \
+  --no-keep-list
+```
+
 Run Jina Code Embeddings:
 
 ```bash
@@ -149,14 +161,18 @@ The default candidate set is `all_files`. The primary metric is overall `MRR`; r
 
 ## Current Leaderboard
 
-The uploaded V1 release includes a lexical baseline for all 225 samples with `skipped={}`. Embedding baselines can be generated with the commands above.
+The uploaded V1 release includes a lexical baseline for all 225 samples with `skipped={}`. RepoMap and embedding baselines can be generated with the commands above.
 
 | Task | Model | Samples | Recall@5 | Recall@10 | Recall@20 | MRR | gold_coverage@8k |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | overall | lexical | 225 | 0.1970 | 0.3267 | 0.4874 | 0.1450 | 0.0785 |
+| overall | aider-style-repomap | 225 | 0.3127 | 0.4735 | 0.6203 | 0.2244 | 0.0681 |
 | code2test | lexical | 106 | 0.0676 | 0.1399 | 0.2469 | 0.0663 | 0.0299 |
+| code2test | aider-style-repomap | 106 | 0.2770 | 0.4201 | 0.5667 | 0.2012 | 0.0739 |
 | comment2context | lexical | 51 | 0.1928 | 0.3595 | 0.5752 | 0.1739 | 0.0784 |
+| comment2context | aider-style-repomap | 51 | 0.2386 | 0.3268 | 0.4837 | 0.2067 | 0.0490 |
 | trace2code | lexical | 68 | 0.4007 | 0.6201 | 0.7966 | 0.2458 | 0.1581 |
+| trace2code | aider-style-repomap | 68 | 0.4240 | 0.6667 | 0.8064 | 0.2740 | 0.0735 |
 
 ## Benchmark Semantics
 

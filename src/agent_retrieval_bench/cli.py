@@ -27,6 +27,7 @@ from .logs import crawl_job_logs
 from .model_report import report_model_leaderboard
 from .quality import validate_samples
 from .release import DEFAULT_DATASET_REPO, download_benchmark_release
+from .repomap_eval import evaluate_repomap_baseline
 from .seed_report import report_v1_seed
 from .trace_preflight import mine_trace2code, trace_debug_drops, trace_debug_summary, trace_preflight, trace_source_scan
 from .trace_repro import mine_trace_repro_runs, run_trace_repro, trace_repro_source
@@ -272,6 +273,21 @@ def main(argv: list[str] | None = None) -> int:
     baseline.add_argument("--limit-samples", type=int)
     baseline.add_argument("--candidate-filter", choices=CANDIDATE_FILTERS, default="all_files")
     baseline.add_argument("--dry-run", action="store_true", help="Use sample gold/supporting paths as a tiny synthetic corpus.")
+
+    repomap = subparsers.add_parser("eval-repomap", help="Run an Aider-style RepoMap vectorless retrieval baseline.")
+    repomap.add_argument("samples", nargs="*", type=Path, help="Benchmark sample JSONL files. Defaults to --derived/*.jsonl.")
+    repomap.add_argument("--derived", type=Path, default=Path("data/benchmark/v1"))
+    repomap.add_argument("--corpus", type=Path, default=Path("data/corpus/v1"))
+    repomap.add_argument("--out", type=Path)
+    repomap.add_argument("--details", type=Path)
+    repomap.add_argument("--keep-list", type=Path, default=Path("data/reports/v1/keep_samples.jsonl"))
+    repomap.add_argument("--no-keep-list", action="store_true")
+    repomap.add_argument("--limit-samples", type=int)
+    repomap.add_argument("--candidate-filter", choices=CANDIDATE_FILTERS, default="all_files")
+    repomap.add_argument("--query-weight", type=float, default=0.65)
+    repomap.add_argument("--pagerank-weight", type=float, default=0.25)
+    repomap.add_argument("--affinity-weight", type=float, default=0.10)
+    repomap.add_argument("--max-symbol-refs-per-file", type=int, default=80)
 
     embedding = subparsers.add_parser("eval-embedding", help="Run an embedding retrieval baseline.")
     embedding.add_argument(
@@ -658,6 +674,25 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(json.dumps(result, indent=2, ensure_ascii=False))
         return 0
+    if args.command == "eval-repomap":
+        sample_paths = args.samples or sample_paths_from_derived(args.derived)
+        keep_list = None if args.no_keep_list else args.keep_list
+        out_path = args.out or default_repomap_summary_path(args.candidate_filter)
+        result = evaluate_repomap_baseline(
+            sample_paths=sample_paths,
+            corpus_dir=args.corpus,
+            out_path=out_path,
+            details_path=args.details or default_baseline_details_path(out_path),
+            keep_list=keep_list,
+            limit_samples=args.limit_samples,
+            candidate_filter=args.candidate_filter,
+            query_weight=args.query_weight,
+            pagerank_weight=args.pagerank_weight,
+            affinity_weight=args.affinity_weight,
+            max_symbol_refs_per_file=args.max_symbol_refs_per_file,
+        )
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return 0
     if args.command == "eval-embedding":
         sample_paths = args.samples or sample_paths_from_derived(args.derived)
         keep_list = None if args.no_keep_list else args.keep_list
@@ -758,6 +793,11 @@ def default_baseline_details_path(out_path: Path) -> Path:
 def default_lexical_summary_path(candidate_filter: str = "all_files", root: Path = Path("data/eval/v0")) -> Path:
     suffix = "_summary" if candidate_filter == "all_files" else f"_{candidate_filter}_summary"
     return root / f"lexical{suffix}.json"
+
+
+def default_repomap_summary_path(candidate_filter: str = "all_files", root: Path = Path("data/eval/v0")) -> Path:
+    suffix = "_summary" if candidate_filter == "all_files" else f"_{candidate_filter}_summary"
+    return root / f"repomap{suffix}.json"
 
 
 def _repos_from_raw(raw_dir: Path) -> list[str]:
