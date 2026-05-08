@@ -6,7 +6,7 @@ import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
-from typing import Any, Iterable
+from typing import Any, Iterable, TextIO
 
 from .baseline import (
     CANDIDATE_FILTERS,
@@ -24,6 +24,7 @@ from .baseline import (
     validate_candidate_filter,
 )
 from .curate import filter_samples, load_keep_ids
+from .embedding_eval import ProgressReporter
 from .io import ensure_parent, read_jsonl
 
 IMPORT_RE = re.compile(
@@ -121,48 +122,66 @@ def evaluate_repomap_baseline(
     pagerank_weight: float = 0.25,
     affinity_weight: float = 0.10,
     max_symbol_refs_per_file: int = 80,
+    progress: bool = False,
+    progress_stream: TextIO | None = None,
 ) -> dict[str, Any]:
     validate_candidate_filter(candidate_filter)
+    reporter = ProgressReporter(progress, progress_stream)
+    reporter.message(f"loading corpus manifest: {corpus_dir / 'corpus_manifest.jsonl'}")
     manifest = load_corpus_manifest(corpus_dir)
+    reporter.message(f"loaded corpus manifest: {len(manifest)} commit corpora")
     keep_ids = load_keep_ids(keep_list)
+    if keep_list:
+        if keep_ids is None:
+            reporter.message(f"keep list not found, evaluating all samples: {keep_list}")
+        else:
+            reporter.message(f"loaded keep list: {len(keep_ids)} ids")
     samples = []
     for sample in filter_samples(iter_samples(sample_paths), keep_ids):
         if limit_samples and len(samples) >= limit_samples:
             break
         samples.append(sample)
+    reporter.message(f"loaded benchmark samples: {len(samples)}")
 
     details: list[dict[str, Any]] = []
     skipped = Counter()
     index_cache: dict[Path, RepoMapIndex] = {}
     pending_by_chunks_path: dict[Path, list[tuple[int, dict[str, Any], list[str], str]]] = defaultdict(list)
+    sample_bar = reporter.bar("evaluating samples", len(samples))
 
     for sample_index, sample in enumerate(samples):
         gold_files = target_gold_files(sample)
         if not gold_files:
             skipped["no_gold"] += 1
+            sample_bar.update(suffix=f"evaluated={len(details)} skipped={sum(skipped.values())}")
             continue
         query_text = query_text_for_eval(sample)
         if query_has_leakage(sample, query_text):
             skipped["query_leakage"] += 1
+            sample_bar.update(suffix=f"evaluated={len(details)} skipped={sum(skipped.values())}")
             continue
         chunks_path = manifest.get((sample.get("repo"), sample.get("base_commit")))
         if not chunks_path:
             skipped["missing_corpus"] += 1
+            sample_bar.update(suffix=f"evaluated={len(details)} skipped={sum(skipped.values())}")
             continue
         pending_by_chunks_path[chunks_path].append((sample_index, sample, gold_files, query_text))
 
-    for chunks_path, pending in pending_by_chunks_path.items():
+    for corpus_index, (chunks_path, pending) in enumerate(pending_by_chunks_path.items(), start=1):
         index = index_cache.get(chunks_path)
         if index is None:
+            reporter.message(f"building repo map {corpus_index}/{len(pending_by_chunks_path)}: {chunks_path}")
             chunks = read_jsonl(chunks_path)
             if not chunks:
                 skipped["empty_corpus"] += len(pending)
+                sample_bar.update(step=len(pending), suffix=f"evaluated={len(details)} skipped={sum(skipped.values())}")
                 continue
             index = build_repomap_index(chunks, max_symbol_refs_per_file=max_symbol_refs_per_file)
             index_cache[chunks_path] = index
         candidate_paths = candidate_paths_for_filter(index.nodes, candidate_filter)
         if not candidate_paths:
             skipped["empty_corpus"] += len(pending)
+            sample_bar.update(step=len(pending), suffix=f"evaluated={len(details)} skipped={sum(skipped.values())}")
             continue
         for sample_index, sample, gold_files, query_text in pending:
             ranked = rank_files_for_sample(
@@ -176,6 +195,7 @@ def evaluate_repomap_baseline(
             )
             if not ranked:
                 skipped["empty_corpus"] += 1
+                sample_bar.update(suffix=f"evaluated={len(details)} skipped={sum(skipped.values())}")
                 continue
             ranked_chunks = ranked_file_chunks(ranked, index.nodes)
             metrics = sample_metrics(gold_files, ranked_chunks)
@@ -195,6 +215,8 @@ def evaluate_repomap_baseline(
                     "metrics": metrics,
                 }
             )
+            sample_bar.update(suffix=f"evaluated={len(details)} skipped={sum(skipped.values())}")
+    sample_bar.finish(suffix=f"evaluated={len(details)} skipped={sum(skipped.values())}")
 
     details.sort(key=lambda item: item.pop("_sample_index", 0))
     result = {

@@ -1,3 +1,4 @@
+import io
 import json
 import tempfile
 import unittest
@@ -123,6 +124,43 @@ class RepoMapEvalTests(unittest.TestCase):
             self.assertEqual(detail["top_files"][0], "tests/test_auth.py")
             self.assertIn("top_file_scores", detail)
             self.assertIn("repo_map_stats", detail)
+
+    def test_evaluate_repomap_reports_progress_when_enabled(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            samples_path = root / "benchmark" / "trace2code.jsonl"
+            corpus_dir = root / "corpus"
+            chunks_path = corpus_dir / "o__r" / "base.chunks.jsonl"
+            write_jsonl(
+                samples_path,
+                [
+                    {
+                        "id": "s1",
+                        "task_type": "trace2code",
+                        "repo": "o/r",
+                        "base_commit": "base",
+                        "query": {"failure_excerpt": "NameError in refresh token"},
+                        "gold": {"root_cause_files": ["src/auth.py"], "related_tests": []},
+                    }
+                ],
+            )
+            write_jsonl(
+                chunks_path,
+                [{"chunk_id": "c1", "path": "src/auth.py", "kind": "file", "symbol": "", "text": "def refresh_token(): pass"}],
+            )
+            write_jsonl(
+                corpus_dir / "corpus_manifest.jsonl",
+                [{"repo": "o/r", "base_commit": "base", "status": "ok", "chunks_path": str(chunks_path)}],
+            )
+            stream = io.StringIO()
+
+            result = evaluate_repomap_baseline([samples_path], corpus_dir, progress=True, progress_stream=stream)
+            output = stream.getvalue()
+
+            self.assertEqual(result["evaluated"], 1)
+            self.assertIn("loading corpus manifest", output)
+            self.assertIn("building repo map", output)
+            self.assertIn("evaluating samples", output)
 
     def test_repomap_summary_default_paths_match_eval_conventions(self):
         self.assertEqual(default_repomap_summary_path("all_files"), Path("data/eval/v0/repomap_summary.json"))

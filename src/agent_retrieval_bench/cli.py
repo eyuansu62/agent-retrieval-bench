@@ -288,6 +288,7 @@ def main(argv: list[str] | None = None) -> int:
     repomap.add_argument("--pagerank-weight", type=float, default=0.25)
     repomap.add_argument("--affinity-weight", type=float, default=0.10)
     repomap.add_argument("--max-symbol-refs-per-file", type=int, default=80)
+    repomap.add_argument("--no-progress", action="store_true", help="Disable RepoMap evaluation progress output.")
 
     embedding = subparsers.add_parser("eval-embedding", help="Run an embedding retrieval baseline.")
     embedding.add_argument(
@@ -690,6 +691,7 @@ def main(argv: list[str] | None = None) -> int:
             pagerank_weight=args.pagerank_weight,
             affinity_weight=args.affinity_weight,
             max_symbol_refs_per_file=args.max_symbol_refs_per_file,
+            progress=not args.no_progress,
         )
         print(json.dumps(result, indent=2, ensure_ascii=False))
         return 0
