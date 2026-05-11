@@ -113,8 +113,8 @@ def row_sort_key(row: dict[str, Any]) -> tuple[Any, ...]:
     return (
         task_sort_key(str(row["task"])),
         CANDIDATE_FILTER_ORDER.get(str(row["candidate_filter"]), 99),
-        -float(row["Recall@20"]),
         -float(row["MRR"]),
+        -float(row["Recall@20"]),
         str(row["model_label"]),
     )
 

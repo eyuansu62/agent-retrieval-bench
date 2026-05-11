@@ -58,6 +58,42 @@ class ModelReportTests(unittest.TestCase):
             self.assertIn("`tests_only`", markdown)
             self.assertIn("## overall", markdown)
 
+    def test_report_model_leaderboard_sorts_by_mrr_before_recall20(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            eval_dir = root / "eval"
+            out = root / "reports" / "leaderboard.md"
+            write_json(
+                eval_dir / "high_recall_summary.json",
+                {
+                    "mode": "repomap",
+                    "model": "high-recall",
+                    "evaluated": 1,
+                    "skipped": {},
+                    "metrics": {
+                        "overall": {"samples": 1, "Recall@5": 0.0, "Recall@10": 0.0, "Recall@20": 1.0, "MRR": 0.1, "gold_coverage@8k": 0.0}
+                    },
+                },
+            )
+            write_json(
+                eval_dir / "high_mrr_summary.json",
+                {
+                    "mode": "embedding",
+                    "model": "high-mrr",
+                    "evaluated": 1,
+                    "skipped": {},
+                    "metrics": {
+                        "overall": {"samples": 1, "Recall@5": 0.0, "Recall@10": 0.0, "Recall@20": 0.5, "MRR": 0.9, "gold_coverage@8k": 0.0}
+                    },
+                },
+            )
+
+            report_model_leaderboard(eval_dir, out)
+            data = json.loads(out.with_suffix(".json").read_text(encoding="utf-8"))
+            overall_rows = [row for row in data["rows"] if row["task"] == "overall"]
+
+            self.assertEqual([row["model_label"] for row in overall_rows], ["high-mrr", "high-recall"])
+
     def test_report_helpers_infer_filter_and_labels(self):
         self.assertEqual(infer_candidate_filter(Path("foo_tests_only_summary.json")), "tests_only")
         self.assertEqual(infer_candidate_filter(Path("foo_summary.json")), "all_files")
