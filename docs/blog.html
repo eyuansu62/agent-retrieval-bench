@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Agent Retrieval Bench V1：面向 Coding Agent 的代码检索基准 · Agent Retrieval Bench</title>
-  <meta name="description" content="Agent Retrieval Bench V1 的动机、任务设计、数据构建方式、baseline 结果与后续方向。" />
+  <title>Agent Retrieval Bench V1: A Code Retrieval Benchmark for Coding Agents · Agent Retrieval Bench</title>
+  <meta name="description" content="Agent Retrieval Bench V1 motivation, task design, data construction, baseline results, and V1.1 roadmap." />
   <style>
     :root {
       --bg: #07100d;
@@ -27,7 +27,7 @@
         radial-gradient(circle at 18% 0%, rgba(105, 231, 173, 0.10), transparent 30%),
         linear-gradient(180deg, #07100d 0%, #0a1512 42%, #08110f 100%);
       color: var(--text);
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       line-height: 1.7;
     }
     body::before {
@@ -102,8 +102,8 @@
   <main>
     <section class="wrap hero">
       <div class="eyebrow">Technical Blog · Full V1</div>
-      <h1>Agent Retrieval Bench V1：面向 Coding Agent 的代码检索基准</h1>
-      <p class="lead">本文介绍 Agent Retrieval Bench V1 的动机、任务设计、数据构建方式、首批 baseline 结果，以及下一阶段 V1.1 的方向。</p>
+      <h1>Agent Retrieval Bench V1: A Code Retrieval Benchmark for Coding Agents</h1>
+      <p class="lead">This post introduces the motivation, task design, data construction process, baseline results, and V1.1 roadmap for Agent Retrieval Bench V1.</p>
       <div class="meta">
         <span class="pill">225 curated samples</span>
         <span class="pill">code2test · comment2context · trace2code</span>
@@ -112,116 +112,109 @@
     </section>
     <div class="wrap layout">
       <article>
-<h2 id="背景-coding-agent-的瓶颈不只在生成代码">背景：coding agent 的瓶颈不只在生成代码</h2>
-<p>过去两年，代码模型和 coding agent 的评测重点大多集中在“最终能不能写出正确 patch”。这当然重要，但在真实软件工程任务里，patch 生成通常不是第一步。一个 agent 在动手修改之前，必须先完成一系列上下文定位工作：理解仓库结构、找到相关实现、找到已有测试、判断失败日志对应的 root cause、识别 review comment 背后的设计约束。</p>
-<p>换句话说，coding agent 的能力链条至少包含三个阶段：</p>
-<ol><li><strong>检索上下文</strong>：从一个大仓库里找到需要阅读的文件。</li><li><strong>推理和规划</strong>：理解这些文件之间的关系，判断该怎么改。</li><li><strong>生成和验证 patch</strong>：修改代码、运行测试、迭代修复。</li></ol>
-<p>现有很多 benchmark 主要评估第三步，或者把第一步隐含在端到端任务里。这样会带来一个问题：当 agent 失败时，我们很难区分失败原因到底是“不会写 patch”，还是“一开始就没找到该看的文件”。在真实仓库中，后者非常常见。一个模型即使具备很强的代码生成能力，如果上下文检索错了，也会产生看似合理但实际无效的修改。</p>
-<p>Agent Retrieval Bench 的出发点就是把这个前置能力单独拿出来测：<strong>给定一个真实 coding workflow 中的任务信号，retriever 能不能把 agent 带到正确的文件附近？</strong></p>
-<h2 id="现有代码检索评测缺了什么">现有代码检索评测缺了什么？</h2>
-<p>传统代码检索通常被建模为一个相对直接的信息检索问题：给定自然语言 query，找语义相近的代码片段；或者给定代码片段，找相似实现。这类设定对搜索 API、代码问答、snippet retrieval 很有价值，但它和 coding agent 的实际上下文需求并不完全一致。</p>
-<p>真实 agentic workflow 中的 query 往往不是“我要找实现 X”。它可能是：</p>
-<ul><li>一个 PR title/body，描述的是行为变化，而不是测试文件名。</li><li>一个 review comment，只指出局部问题，但真正需要看的约束在别的模块。</li><li>一段失败日志，包含测试名、panic、assertion、stack trace，但 root cause 可能不在 trace frame 里。</li><li>一个迁移或兼容性任务，影响范围跨配置、runtime、测试和文档。</li></ul>
-<p>这些场景有几个共同特点。</p>
-<p>第一，<strong>gold 文件不一定和 query 语义相近</strong>。例如 <code>trace2code</code> 中，失败日志可能只出现测试函数名，但真正需要找的是 source file 中的行为实现。Embedding 模型如果只依赖语义相似度，可能会优先返回测试文件或日志中直接出现的路径。</p>
-<p>第二，<strong>文件关系比单文件语义更重要</strong>。Source/test 映射、package/module 结构、symbol reference、reviewed file 与上下文文件之间的依赖关系，经常决定什么文件应该被找回。这类信号更接近 repo graph，而不是单纯文本相似度。</p>
-<p>第三，<strong>泄漏很容易发生</strong>。如果 query 中直接包含 gold path、test basename、fix diff 或后续 patch 内容，检索任务会退化成路径匹配。这样的样本会高估系统能力，尤其会让 lexical baseline 看起来异常强。</p>
-<p>第四，<strong>端到端 agent 成功率无法解释检索质量</strong>。一个 agent 可能因为工具、测试环境、patch 生成、依赖安装等原因失败；也可能靠很强的模型推理弥补检索错误。我们需要一个更小、更可诊断的 benchmark，专门衡量 retrieval 这一环。</p>
-<p>因此，我们把问题重新定义为 <strong>agentic retrieval</strong>：不是找“语义最像的代码”，而是找“agent 为了完成任务必须阅读的仓库文件”。</p>
-<h2 id="三个代表性例子">三个代表性例子</h2>
-<p>为了说明这个问题不是人为构造出来的，我们可以看三个简化后的任务形态。它们不是完整 PR 复盘，而是从 V1 数据构建过程中反复出现的模式中抽象出来的 representative examples。</p>
-<h3 id="例子一-pr-intent-不直接指向测试文件">例子一：PR intent 不直接指向测试文件</h3>
-<p>Agent 看到的信号可能是一个 PR 描述：</p>
+<h2 id="background-coding-agents-fail-before-they-write-patches">Background: coding agents fail before they write patches</h2>
+<p>Over the last two years, most evaluations for code models and coding agents have focused on whether the system can eventually produce a correct patch. That target matters, but patch generation is rarely the first step in a real software engineering workflow. Before an agent can edit code, it has to locate the relevant context: repository structure, implementation files, existing tests, root causes behind failures, and design constraints hidden in review comments.</p>
+<p>A coding agent&#x27;s workflow therefore contains at least three stages:</p>
+<ol><li><strong>Context retrieval</strong>: finding the files that need to be read in a large repository.</li><li><strong>Reasoning and planning</strong>: understanding how those files relate and deciding what should change.</li><li><strong>Patch generation and verification</strong>: editing code, running tests, and iterating on failures.</li></ol>
+<p>Many existing benchmarks emphasize the third stage, or hide the first stage inside an end-to-end task. That makes failures hard to interpret. When an agent fails, did it fail because it cannot write the patch, or because it never found the files it needed? In large real repositories, the second failure mode is common. A model can be strong at code generation and still produce plausible but useless patches if its retrieved context is wrong.</p>
+<p>Agent Retrieval Bench isolates this upstream capability: <strong>given a task signal from a real coding workflow, can a retriever bring the agent near the files it must read?</strong></p>
+<h2 id="what-existing-code-retrieval-benchmarks-miss">What existing code retrieval benchmarks miss</h2>
+<p>Traditional code retrieval is often framed as direct information retrieval: given a natural-language query, retrieve semantically similar code snippets; or given a code snippet, retrieve similar implementations. That setting is useful for search APIs, code QA, and snippet retrieval, but it does not fully match the context needs of coding agents.</p>
+<p>In an agentic workflow, the query is often not “find implementation X.” It may be:</p>
+<ul><li>a PR title or body that describes behavior, not the test file name;</li><li>a review comment that points to a local issue while the required constraint lives in another module;</li><li>a failure log containing a test name, panic, assertion, or stack trace, where the root cause is not the trace frame itself;</li><li>a migration or compatibility task whose affected files span configuration, runtime code, tests, and documentation.</li></ul>
+<p>These settings share several properties.</p>
+<p>First, <strong>the gold file is not necessarily semantically similar to the query</strong>. In <code>trace2code</code>, for example, the failure log may mention only a test function, while the file that must be modified is a source implementation. A pure embedding model may rank the visible test file or path above the true source file.</p>
+<p>Second, <strong>file relationships often matter more than single-file semantics</strong>. Source/test mappings, package structure, module boundaries, symbol references, and dependencies between the reviewed file and its surrounding context frequently determine what should be retrieved. These are repository-graph signals, not just text-similarity signals.</p>
+<p>Third, <strong>leakage is easy</strong>. If the query contains the gold path, the test basename, the fix diff, or content from the final patch, retrieval collapses into path matching. Such samples overestimate system quality and can make lexical baselines look much stronger than they are.</p>
+<p>Fourth, <strong>end-to-end agent success does not explain retrieval quality</strong>. Agents can fail because of tools, test environments, patch generation, or dependency installation. They can also compensate for weak retrieval with strong reasoning. We need a smaller, more diagnostic benchmark that measures retrieval itself.</p>
+<p>We therefore define the problem as <strong>agentic retrieval</strong>: not “retrieve code that looks semantically similar,” but “retrieve the repository files that an agent needs to read to complete the task.”</p>
+<h2 id="three-representative-examples">Three representative examples</h2>
+<p>The following examples are simplified, but they capture patterns that repeatedly appeared while constructing V1. They are not full PR case studies; they illustrate why the task is not synthetic.</p>
+<h3 id="example-1-pr-intent-does-not-directly-name-the-test-files">Example 1: PR intent does not directly name the test files</h3>
+<p>The agent may see a PR-level signal such as:</p>
 <blockquote><p>Add support for optional values in shell completion.</p></blockquote>
-<p>这个 query 很自然地会命中 completion engine 的实现文件，因为 “optional values” 和 “completion” 都是实现侧概念。但如果 agent 的任务是补测试或验证行为，它真正需要找的可能是不同 shell backend 的 completion tests，例如 bash、fish、PowerShell 或 elvish 的测试快照。</p>
-<p>容易犯的错误是：retriever 只返回实现文件，或者返回文档和 changelog。这样的结果对理解实现有帮助，但对“应该改哪些测试”帮助有限。</p>
-<p>这个例子说明 <code>code2test</code> 不是简单的文本相似检索。测试文件名不一定出现在 PR 描述里，甚至测试文件可能和实现文件不在同一目录。retriever 需要学到 source→test 映射、模块边界和行为覆盖关系。</p>
-<h3 id="例子二-review-comment-所在文件不是完整上下文">例子二：review comment 所在文件不是完整上下文</h3>
-<p>Review comment 往往落在某个具体 hunk 上，例如 reviewer 在一个 endpoint 或 serializer 的实现附近问：</p>
+<p>A query like this naturally matches completion-engine implementation files: the words “optional values” and “completion” describe implementation behavior. But if the agent needs to add or verify tests, the relevant files may be shell-specific completion tests or snapshots for bash, fish, PowerShell, or elvish.</p>
+<p>A common retrieval failure is to return only implementation files, documentation, or changelogs. Those files help explain the feature, but they do not tell the agent which tests should be edited or inspected.</p>
+<p>This is why <code>code2test</code> is not a simple semantic-similarity task. The test file name may never appear in the PR description, and the test may live outside the implementation directory. A retriever has to learn source-to-test mappings, module boundaries, and behavioral coverage relationships.</p>
+<h3 id="example-2-the-reviewed-file-is-not-the-complete-context">Example 2: the reviewed file is not the complete context</h3>
+<p>A review comment often lands on a specific hunk. For example, a reviewer might ask near an endpoint or serializer implementation:</p>
 <blockquote><p>Should this be sanitized consistently with the web response path?</p></blockquote>
-<p>如果把任务简化成“找 comment 所在文件”，这个样本会非常容易。但对 coding agent 来说，被评论文件只是已经给定的局部上下文。真正需要看的可能是：</p>
-<ul><li>另一个 web extension 中已有的 sanitize 逻辑；</li><li>相关配置属性；</li><li>已有 endpoint tests；</li><li>文档中定义的 masking/sanitization 行为。</li></ul>
-<p>容易犯的错误是：retriever 把 comment 所在文件排第一，然后认为任务完成。但 agent 实际上还缺少判断一致性的依据。</p>
-<p>这就是 <code>comment2context</code> 的 motivation：我们把 comment 所在文件放入 <code>given_files</code>，不作为主指标 gold；模型必须找的是额外上下文。这样才能测出 review 场景中真正有价值的 retrieval 能力。</p>
-<h3 id="例子三-failure-trace-经常指向测试-而不是-root-cause">例子三：failure trace 经常指向测试，而不是 root cause</h3>
-<p>失败日志里最明显的路径往往是测试文件。例如一个 Go 或 Python 测试失败可能只显示：</p>
+<p>If the task is reduced to “find the file containing the comment,” it becomes trivial. But for a coding agent, that file is already given local context. The missing context may be:</p>
+<ul><li>an existing sanitization implementation in another web extension;</li><li>a related configuration property;</li><li>endpoint tests that define the expected behavior;</li><li>documentation that specifies masking or sanitization semantics.</li></ul>
+<p>The easy mistake is to rank the commented file first and declare success. The agent still lacks the evidence needed to decide what “consistent” means.</p>
+<p>This motivates <code>comment2context</code>: the file containing the review comment is recorded as <code>given_files</code> and is not counted as the main gold. The model must retrieve additional context files. This makes the task measure useful review-time retrieval instead of local path recovery.</p>
+<h3 id="example-3-failure-traces-often-point-to-tests-not-root-causes">Example 3: failure traces often point to tests, not root causes</h3>
+<p>The most visible path in a failure log is frequently a test file. A Go or Python failure might look like:</p>
 <pre><code class="language-text">--- FAIL: TestOptionalCompletion
     completion_test.go:42: expected candidates [...], got [...]</code></pre>
-<p>或者一个 panic/traceback 的顶部 frame 在 test helper 中。直接路径匹配会优先返回 <code>completion_test.go</code>。但如果测试文件只是复现信号，真正要修改的可能是 completion engine、argument parser、runtime config 或某个 source module。</p>
-<p>容易犯的错误是：把 trace 中出现的测试文件当成 root cause。对于人类工程师来说，测试文件告诉你“哪里失败了”，不一定告诉你“哪里错了”。Agent 也一样。</p>
-<p>这就是 <code>trace2code</code> 的核心：gold 是人工审核过的 root-cause source files，related tests 只作为辅助信息。这个任务要求 retriever 从 failure text、repo structure、source/test 关系和局部符号信号中推断 root cause，而不是做 trace-frame lookup。</p>
-<p>这三个例子共同说明：agentic retrieval 的难点不在于 query 没有信息，而在于 query 的信息经常是间接的。一个好的 retriever 需要把局部信号映射到完成任务所需的仓库上下文。</p>
-<h2 id="我们想回答的研究问题">我们想回答的研究问题</h2>
-<p>Agent Retrieval Bench V1 不是为了证明某一种检索方法最好，而是为了提供一个能区分不同检索机制的诊断面。我们特别关心几个问题：</p>
-<ol><li><strong>语义 embedding 是否足够？</strong></li></ol>
-<p>如果任务信号来自 PR、review comment 或 failure trace，向量检索是否仍然稳定优于 lexical 和结构化方法？</p>
-<ol><li><strong>vectorless repo map 是否有独立价值？</strong></li></ol>
-<p>Aider-style RepoMap 这类方法不依赖 embedding，而是利用 symbol、path、reference 和 source/test 关系。它是否能在某些 agent 场景里超过 embedding？</p>
-<ol><li><strong>不同任务是否需要不同 retrieval bias？</strong></li></ol>
-<p><code>code2test</code>、<code>comment2context</code>、<code>trace2code</code> 看似都是“找文件”，但它们依赖的信号完全不同。一个统一 retriever 是否会在任务之间表现不均衡？</p>
-<ol><li><strong>能否构造一个不会被路径泄漏和同名测试支配的 benchmark？</strong></li></ol>
-<p>如果 benchmark 太容易，lexical baseline 接近 ceiling，就很难判断高级 retriever 是否真的有用。V1 的设计目标之一，是让任务保持可解但不被简单路径匹配解决。</p>
-<p>这些问题决定了 V1 的数据策略：我们不追求一开始就做成数千条样本，而是先做一个小而硬、人工审核、可复现、能暴露方法差异的版本。</p>
-<h2 id="设计原则">设计原则</h2>
-<p>V1 的设计遵循几个原则。</p>
-<p><strong>第一，评测对象是 file-level retrieval。</strong> Coding agent 最终需要的是可读上下文文件，而不只是单个 chunk。我们仍然用 chunked corpus 支持 ranking 和 8k budget 统计，但主指标围绕 gold file 是否被找回。</p>
-<p><strong>第二，候选 corpus 固定在 base commit。</strong> 每条样本都在任务发生前的仓库状态上评测。后续修复、PR final diff、人工 gold 证据都不能进入 query 或候选 corpus。这样可以避免把答案泄漏到索引里。</p>
-<p><strong>第三，query 尽量模拟 agent 实际可见信息。</strong> <code>code2test</code> 使用 PR 意图和实现变化描述；<code>comment2context</code> 使用 review comment 和给定文件；<code>trace2code</code> 使用本地复现产生的 failure excerpt。query 不包含 fix patch、raw diff 或 gold 路径。</p>
-<p><strong>第四，gold 必须是“完成任务需要看的文件”。</strong> 尤其在 <code>comment2context</code> 中，comment 所在文件只是 given context，不参与主 Recall；在 <code>trace2code</code> 中，测试文件可以是 related tests，但主 gold 必须是 root-cause source file。</p>
-<p><strong>第五，保留多种 baseline。</strong> 我们同时报告 lexical、RepoMap、Jina 和 Qwen，不把 benchmark 绑定到某一种检索范式。一个好的 agent retrieval benchmark 应该能显示不同归纳偏置的优缺点。</p>
-<p>这也是 V1 的核心 motivation：构建一个足够接近 coding agent 工作流、又足够可控和可解释的检索评测层。</p>
-<h2 id="v1-包含什么">V1 包含什么？</h2>
-<p>Agent Retrieval Bench V1 是当前冻结的主 benchmark。它包含 225 条人工 curated 样本，覆盖三类任务：</p>
+<p>Or the top frame of a panic/traceback may be in a test helper. Direct path matching will rank <code>completion_test.go</code> highly. But if the test is only the reproduction signal, the file to change may be the completion engine, the argument parser, runtime configuration, or another source module.</p>
+<p>The mistake is to treat the trace frame as the root cause. For a human engineer, a test file often tells you where the failure is observed, not where the bug is. The same distinction matters for agents.</p>
+<p>That is the core of <code>trace2code</code>: the gold files are manually audited root-cause source files; related tests are auxiliary context only. The task asks the retriever to infer the root cause from failure text, repository structure, source/test relationships, and local symbol signals, rather than performing trace-frame lookup.</p>
+<p>Together, these examples show that agentic retrieval is hard not because the query has no information, but because the useful information is indirect. A strong retriever has to map local signals to the repository context required to finish the task.</p>
+<h2 id="research-questions">Research questions</h2>
+<p>Agent Retrieval Bench V1 is not designed to prove that one retrieval method is universally best. It is designed to expose which retrieval mechanisms work under different coding-agent signals. We focus on four questions.</p>
+<ul><li><strong>Are semantic embeddings enough?</strong> When the task signal comes from a PR, a review comment, or a failure trace, does vector retrieval still consistently beat lexical and structured methods?</li><li><strong>Do vectorless repo maps have independent value?</strong> Aider-style RepoMap methods use symbols, paths, references, and source/test relations rather than embeddings. Can this class of method outperform embeddings in some agent workflows?</li><li><strong>Do different tasks require different retrieval biases?</strong> <code>code2test</code>, <code>comment2context</code>, and <code>trace2code</code> all ask the system to “find files,” but they rely on very different signals. A single retriever may behave unevenly across tasks.</li><li><strong>Can we avoid path leakage and same-name-test shortcuts?</strong> If lexical retrieval approaches the ceiling, the benchmark cannot show whether stronger retrieval methods are useful. V1 is designed to remain solvable while resisting simple path matching.</li></ul>
+<p>These questions shaped the data strategy. We did not start by optimizing for thousands of samples. We first built a small, hard, manually audited, reproducible benchmark that can reveal method differences.</p>
+<h2 id="design-principles">Design principles</h2>
+<p>V1 follows several design principles.</p>
+<p><strong>First, the evaluation target is file-level retrieval.</strong> Coding agents ultimately need readable context files, not isolated chunks. The corpus is chunked to support ranking and 8k-budget diagnostics, but the primary metrics ask whether the gold file is retrieved.</p>
+<p><strong>Second, the candidate corpus is fixed at the base commit.</strong> Each sample is evaluated against the repository state before the task was resolved. Later fixes, PR-final diffs, and human gold evidence are not allowed into the query or candidate corpus. This prevents answer leakage through the index.</p>
+<p><strong>Third, queries should resemble information an agent would actually see.</strong> <code>code2test</code> uses PR intent and implementation-change summaries; <code>comment2context</code> uses the review comment and given file; <code>trace2code</code> uses failure excerpts from local reproduction. Queries do not contain fix patches, raw diffs, or gold paths.</p>
+<p><strong>Fourth, gold means files needed to complete the task.</strong> For <code>comment2context</code>, the commented file is given context, not the main gold. For <code>trace2code</code>, tests can be related context, but the main gold must be a root-cause source file.</p>
+<p><strong>Fifth, multiple retrieval paradigms should be reported.</strong> We report lexical, RepoMap, Jina, and Qwen baselines. The benchmark is not tied to a single retrieval family. A good agent retrieval benchmark should reveal the strengths and weaknesses of different inductive biases.</p>
+<p>The core motivation is to build a retrieval layer that is close enough to real coding-agent workflows while remaining controlled, reproducible, and interpretable.</p>
+<h2 id="what-is-in-v1">What is in V1?</h2>
+<p>Agent Retrieval Bench V1 is the current frozen benchmark. It contains 225 manually curated samples across three tasks:</p>
 <div class="table-scroll"><table><thead><tr>
-<th>任务</th>
-<th>样本数</th>
-<th>评测目标</th>
+<th>Task</th>
+<th>Samples</th>
+<th>Evaluation target</th>
 </tr></thead><tbody>
 <tr>
 <td><code>code2test</code></td>
 <td>106</td>
-<td>给定实现变化或 PR 意图，找相关测试文件</td>
+<td>Given implementation intent or PR intent, retrieve related test files</td>
 </tr>
 <tr>
 <td><code>comment2context</code></td>
 <td>51</td>
-<td>给定 review comment 和被评论文件，找额外必须看的上下文文件</td>
+<td>Given a review comment and reviewed file, retrieve additional required context files</td>
 </tr>
 <tr>
 <td><code>trace2code</code></td>
 <td>68</td>
-<td>给定真实复现的失败 trace，找 root-cause source files</td>
+<td>Given a reproduced failure trace, retrieve root-cause source files</td>
 </tr>
 <tr>
-<td><strong>总计</strong></td>
+<td><strong>Total</strong></td>
 <td><strong>225</strong></td>
 <td></td>
 </tr>
 </tbody></table></div>
-<p>每条样本都在 <code>repo_at_base_commit</code> 上评测。也就是说，候选 corpus 是修复前的仓库状态，后续 patch 不会进入索引。这样可以避免把答案泄漏给检索器。</p>
-<p>V1 还附带了完整 corpus、baseline 输出和报告。用户可以通过一条命令下载：</p>
+<p>Every sample is evaluated on <code>repo_at_base_commit</code>: the repository state before the fix. The candidate corpus therefore does not include the later patch.</p>
+<p>V1 ships with the benchmark files, full corpus, baseline outputs, and reports. Users can download everything with one command:</p>
 <pre><code class="language-bash">arb download-benchmark --version v1 --local-dir data --force</code></pre>
-<p>这条命令会自动从 Hugging Face 下载 release bundle、校验 checksum，并解压出：</p>
+<p>The command downloads the release bundle from Hugging Face, verifies checksums, and extracts:</p>
 <pre><code class="language-text">benchmark/v1/
 corpus/v1/
 eval/v1/
 reports/v1/</code></pre>
-<h2 id="三个任务分别在测什么">三个任务分别在测什么？</h2>
-<h3 id="1-code2test-实现变化应该对应哪些测试">1. <code>code2test</code>：实现变化应该对应哪些测试？</h3>
-<p>这个任务模拟 agent 收到一个 PR 或实现变更意图后，需要判断应该看哪些测试文件。query 中不会直接给出测试路径或测试文件 basename。gold 是人工确认的相关测试文件。</p>
-<p>它考察的是跨 source/test 的结构联想能力，而不是文件名匹配能力。</p>
-<h3 id="2-comment2context-review-comment-之外还要看什么">2. <code>comment2context</code>：review comment 之外还要看什么？</h3>
-<p>Review comment 通常落在某个具体文件上，但 reviewer 的真实意图经常依赖其他上下文：API 约束、配置行为、已有测试、另一个模块的实现等。</p>
-<p>V1 中 <code>comment2context</code> 把 comment 所在文件视为 given context，不计入主指标。模型必须找的是额外上下文文件。这一点很重要，否则任务会退化成“找到 comment 所在文件”。</p>
-<h3 id="3-trace2code-失败-trace-的-root-cause-在哪里">3. <code>trace2code</code>：失败 trace 的 root cause 在哪里？</h3>
-<p><code>trace2code</code> 来自本地测试复现产生的 failure trace，包括 compile error、assertion failure、panic 等。主 gold 是人工审核过的 root-cause source files；相关测试文件只作为辅助信息，不作为主 gold。</p>
-<p>这个任务故意不奖励“trace frame path lookup”。如果 trace 里只有测试文件，模型仍然需要借助仓库结构和 failure signal 推断真正相关的 source file。</p>
-<h2 id="baseline-我们测了哪些方法">Baseline：我们测了哪些方法？</h2>
-<p>V1 附带四类 baseline：</p>
-<ol><li><strong>lexical</strong>：传统词法检索。</li><li><strong>aider-style-repomap</strong>：不使用向量的 RepoMap baseline，通过 file/symbol/reference graph 和 query-aware ranking 排文件。</li><li><strong>jina-code-embeddings-0.5b</strong>：代码 embedding 模型。</li><li><strong>Qwen3-Embedding-4B</strong>：通用/代码能力更强的 embedding 模型。</li></ol>
-<p>主排序指标是 overall <code>MRR</code>，同时报告 <code>Recall@5/10/20</code> 和 <code>gold_coverage@8k</code>。</p>
-<h2 id="当前结果">当前结果</h2>
-<p>整体结果如下：</p>
+<h2 id="what-does-each-task-measure">What does each task measure?</h2>
+<h3 id="1-code2test-which-tests-correspond-to-an-implementation-change">1. <code>code2test</code>: which tests correspond to an implementation change?</h3>
+<p>This task simulates an agent receiving a PR or implementation-change intent and needing to identify the relevant tests. The query does not directly include test paths or test basenames. The gold files are manually confirmed related tests.</p>
+<p>The task measures structural source-to-test association, not filename matching.</p>
+<h3 id="2-comment2context-what-else-must-be-read-beyond-the-review-comment">2. <code>comment2context</code>: what else must be read beyond the review comment?</h3>
+<p>Review comments often appear on one file, but the reviewer’s intent depends on other context: API contracts, configuration behavior, existing tests, or parallel implementations.</p>
+<p>In V1, <code>comment2context</code> treats the reviewed file as given context. It is not counted in the main metric. The model must retrieve the additional context files. Without this rule, the task degenerates into finding the commented file.</p>
+<h3 id="3-trace2code-where-is-the-root-cause-behind-a-failure-trace">3. <code>trace2code</code>: where is the root cause behind a failure trace?</h3>
+<p><code>trace2code</code> uses failure traces produced by local test reproduction, including compile errors, assertion failures, and panics. The main gold files are manually audited root-cause source files. Related tests are auxiliary and are not main gold.</p>
+<p>The task intentionally does not reward trace-frame lookup. If the trace shows only a test file, the retriever must still use repository structure and failure signals to infer the relevant source file.</p>
+<h2 id="baselines">Baselines</h2>
+<p>V1 includes four baseline families:</p>
+<ol><li><strong>lexical</strong>: traditional lexical retrieval.</li><li><strong>aider-style-repomap</strong>: a vectorless RepoMap baseline that ranks files using a file/symbol/reference graph and query-aware scoring.</li><li><strong>jina-code-embeddings-0.5b</strong>: a code embedding model.</li><li><strong>Qwen3-Embedding-4B</strong>: a stronger embedding model with broad code and general retrieval capacity.</li></ol>
+<p>The leaderboard is sorted by overall <code>MRR</code>, and also reports <code>Recall@5/10/20</code> and <code>gold_coverage@8k</code>.</p>
+<h2 id="current-results">Current results</h2>
+<p>Overall results:</p>
 <div class="table-scroll"><table><thead><tr>
 <th>Model</th>
 <th>Samples</th>
@@ -268,12 +261,12 @@ reports/v1/</code></pre>
 <td>0.0785</td>
 </tr>
 </tbody></table></div>
-<p>按任务拆开看，结论更有意思：</p>
+<p>The task-level picture is more informative:</p>
 <div class="table-scroll"><table><thead><tr>
-<th>任务</th>
-<th>最强 MRR 模型</th>
+<th>Task</th>
+<th>Best MRR model</th>
 <th>MRR</th>
-<th>最强 Recall@20 模型</th>
+<th>Best Recall@20 model</th>
 <th>Recall@20</th>
 </tr></thead><tbody>
 <tr>
@@ -305,34 +298,33 @@ reports/v1/</code></pre>
 <td>0.8064</td>
 </tr>
 </tbody></table></div>
-<p>几个直接观察：</p>
-<ul><li>Qwen3-Embedding-4B 在 overall MRR 和 <code>code2test</code> 上最强。</li><li>Jina 在 <code>comment2context</code> 上 MRR 最强。</li><li>RepoMap 在 <code>trace2code</code> 上明显强于 embedding，并且 overall Recall@20 最高。</li><li><code>trace2code</code> 对 embedding 不友好，这不是数据错误，而是一个有价值的信号：失败日志定位更依赖结构、路径、调用关系和 repo graph，而不只是语义相似度。</li></ul>
-<h2 id="为什么-repomap-在-trace2code-上强">为什么 RepoMap 在 trace2code 上强？</h2>
-<p>这和任务本身有关。</p>
-<p>Embedding 模型擅长把自然语言 query 和语义相近的代码放近。但 failure trace 经常包含：</p>
-<ul><li>文件路径片段；</li><li>函数名；</li><li>package/module 名；</li><li>测试名；</li><li>panic/assertion 的局部文本。</li></ul>
-<p>这些信号不一定和 root-cause source file 的语义描述相近，但它们在仓库结构图里很有用。RepoMap baseline 用 file/symbol/reference graph 做 query-aware ranking，因此更容易利用这些结构信号。</p>
-<p>这也说明：agentic retrieval 不应该只有 vector baseline。对于某些 coding agent 场景，vectorless repo map、symbol graph、dependency graph 可能比 embedding 更契合。</p>
-<h2 id="数据构建原则">数据构建原则</h2>
-<p>V1 最重要的原则是：宁可少，也不要把简单或泄漏样本混进去。</p>
-<p>我们做了几件事：</p>
-<ul><li>V1 样本全部人工 curated。</li><li>查询中避免直接出现 gold path、basename、raw patch、fix diff。</li><li><code>comment2context</code> 不把 comment 所在文件作为主 gold。</li><li><code>trace2code</code> 只把 root-cause source files 作为主 gold，测试文件只能做辅助信息。</li><li>所有样本都在 base commit corpus 上评测，避免用修复后的文件污染候选集。</li></ul>
-<p>最终审核结果中，V1 保留 225 条，另有 222 条被丢弃或标为不适合进入主 benchmark。</p>
-<h2 id="如何复现">如何复现？</h2>
-<p>安装 evaluator：</p>
+<p>Several observations stand out:</p>
+<ul><li>Qwen3-Embedding-4B is strongest on overall MRR and <code>code2test</code>.</li><li>Jina has the strongest MRR on <code>comment2context</code>.</li><li>RepoMap is substantially stronger on <code>trace2code</code> and has the best overall Recall@20.</li><li><code>trace2code</code> is hard for embedding models. This is not a data bug; it is a useful signal that failure-log localization depends heavily on structure, paths, call relations, and repository graphs rather than semantic similarity alone.</li></ul>
+<h2 id="why-does-repomap-work-well-on-trace2code">Why does RepoMap work well on <code>trace2code</code>?</h2>
+<p>The reason is tied to the task. Embedding models are good at placing natural-language queries near semantically similar code. But failure traces often contain:</p>
+<ul><li>path fragments;</li><li>function names;</li><li>package or module names;</li><li>test names;</li><li>localized panic or assertion text.</li></ul>
+<p>These signals may not be semantically similar to the root-cause source file, but they are useful in a repository graph. The RepoMap baseline uses a file/symbol/reference graph with query-aware ranking, so it can exploit structural signals that embeddings may underweight.</p>
+<p>This result suggests that agentic retrieval should not be evaluated only with vector baselines. In some coding-agent settings, vectorless repo maps, symbol graphs, dependency graphs, and task-aware ranking may be more aligned with the problem.</p>
+<h2 id="data-construction-principles">Data construction principles</h2>
+<p>The most important rule for V1 is: fewer samples are better than easy or leaked samples.</p>
+<p>We applied several safeguards:</p>
+<ul><li>all V1 samples are manually curated;</li><li>queries avoid direct gold paths, basenames, raw patches, and fix diffs;</li><li><code>comment2context</code> does not count the reviewed file as main gold;</li><li><code>trace2code</code> counts only root-cause source files as main gold; tests are auxiliary;</li><li>every sample is evaluated on the base-commit corpus to avoid contamination from the fixed state.</li></ul>
+<p>The final V1 keeps 225 samples. Another 222 audited or mined samples were rejected or marked unsuitable for the main benchmark.</p>
+<h2 id="how-to-reproduce">How to reproduce</h2>
+<p>Install the evaluator:</p>
 <pre><code class="language-bash">pip install &quot;git+https://github.com/eyuansu62/agent-retrieval-bench.git&quot;</code></pre>
-<p>下载 V1：</p>
+<p>Download V1:</p>
 <pre><code class="language-bash">arb download-benchmark --version v1 --local-dir data --force</code></pre>
-<p>验证样本：</p>
+<p>Validate the samples:</p>
 <pre><code class="language-bash">arb validate data/benchmark/v1/*.jsonl</code></pre>
-<p>跑 lexical baseline：</p>
+<p>Run the lexical baseline:</p>
 <pre><code class="language-bash">arb eval-baseline \
   --derived data/benchmark/v1 \
   --corpus data/corpus/v1 \
   --out data/eval/v1/lexical_summary.json \
   --details data/eval/v1/lexical_details.jsonl \
   --no-keep-list</code></pre>
-<p>跑 RepoMap baseline：</p>
+<p>Run the RepoMap baseline:</p>
 <pre><code class="language-bash">arb eval-repomap \
   --derived data/benchmark/v1 \
   --corpus data/corpus/v1 \
@@ -340,42 +332,42 @@ reports/v1/</code></pre>
   --details data/eval/v1/repomap_details.jsonl \
   --candidate-filter all_files \
   --no-keep-list</code></pre>
-<p>生成 leaderboard：</p>
+<p>Generate a leaderboard:</p>
 <pre><code class="language-bash">arb report-models \
   --eval-dir data/eval/v1 \
   --out data/reports/v1/model_leaderboard.md \
   --json-out data/reports/v1/model_leaderboard.json</code></pre>
-<p>数据在 Hugging Face：<code>eyuansu71/agent_retrieval_bench</code>。代码在 GitHub：<code>eyuansu62/agent-retrieval-bench</code>。</p>
-<h2 id="下一步-v1-1">下一步：V1.1</h2>
-<p>V1 已冻结，后续不会修改 <code>benchmark/v1</code>。下一步会做 V1.1，重点不是盲目扩大总量，而是定向补薄弱任务：</p>
-<ul><li><code>comment2context</code>：从 51 扩到 80–100，优先跨模块、无路径泄漏、非同目录上下文。</li><li><code>trace2code</code>：从 68 扩到 100+，增加非 Go repo、更多语言和更多 failure 类型。</li><li><code>code2test</code>：当前已有 106 条，暂不默认扩充。</li></ul>
-<p>长期看，我们希望 Agent Retrieval Bench 能覆盖更多真实 coding agent 场景，例如 issue/bug report → code、migration task → affected files、API usage → implementation 等。但 V1 的第一步，是先把 code review、test retrieval 和 trace root-cause retrieval 三个核心能力测清楚。</p>
-<h2 id="结语">结语</h2>
-<p>Agent 的能力上限不只取决于模型会不会生成 patch，也取决于它能不能在大仓库里找到该看的文件。</p>
-<p>Agent Retrieval Bench V1 想测的正是这个前置能力：面对 PR 意图、review comment、失败 trace，一个 retriever 能不能把 agent 带到正确的上下文附近。</p>
-<p>从首批结果看，embedding、lexical 和 RepoMap 各有优势，没有一种方法在所有任务上统治。这说明 agentic retrieval 很可能需要混合路线：语义向量、结构图、符号索引和任务感知 ranking 需要一起工作。</p>
+<p>Dataset: <code>eyuansu71/agent_retrieval_bench</code> on Hugging Face. Code: <code>eyuansu62/agent-retrieval-bench</code> on GitHub.</p>
+<h2 id="next-v1-1">Next: V1.1</h2>
+<p>V1 is frozen. We will not modify <code>benchmark/v1</code>. The next release will be V1.1, focused on targeted gaps rather than raw scale.</p>
+<ul><li><code>comment2context</code>: expand from 51 to 80–100, prioritizing cross-module context without path leakage or same-directory shortcuts.</li><li><code>trace2code</code>: expand from 68 to 100+, adding non-Go repositories, more languages, and more failure types.</li><li><code>code2test</code>: currently has 106 samples, so it is not the default expansion target.</li></ul>
+<p>Longer term, we want Agent Retrieval Bench to cover more real coding-agent scenarios, such as issue/bug report → code, migration task → affected files, and API usage → implementation. V1 is the first step: measure code review, test retrieval, and trace root-cause retrieval clearly.</p>
+<h2 id="closing">Closing</h2>
+<p>An agent’s ceiling is not determined only by whether it can write a patch. It is also determined by whether it can find the files it needs to read in a large repository.</p>
+<p>Agent Retrieval Bench V1 measures this upstream capability: given PR intent, a review comment, or a failure trace, can a retriever bring the agent near the right repository context?</p>
+<p>The first results show that embeddings, lexical retrieval, and RepoMap each have distinct strengths. No method dominates every task. That points toward a hybrid future for agentic retrieval: semantic vectors, repository graphs, symbol indexes, and task-aware ranking all need to work together.</p>
       </article>
       <aside class="toc" aria-label="Table of contents">
         <h2>Contents</h2>
-<a href="#背景-coding-agent-的瓶颈不只在生成代码">背景：coding agent 的瓶颈不只在生成代码</a>
-<a href="#现有代码检索评测缺了什么">现有代码检索评测缺了什么？</a>
-<a href="#三个代表性例子">三个代表性例子</a>
-<a href="#我们想回答的研究问题">我们想回答的研究问题</a>
-<a href="#设计原则">设计原则</a>
-<a href="#v1-包含什么">V1 包含什么？</a>
-<a href="#三个任务分别在测什么">三个任务分别在测什么？</a>
-<a href="#baseline-我们测了哪些方法">Baseline：我们测了哪些方法？</a>
-<a href="#当前结果">当前结果</a>
-<a href="#为什么-repomap-在-trace2code-上强">为什么 RepoMap 在 trace2code 上强？</a>
-<a href="#数据构建原则">数据构建原则</a>
-<a href="#如何复现">如何复现？</a>
-<a href="#下一步-v1-1">下一步：V1.1</a>
-<a href="#结语">结语</a>
+<a href="#background-coding-agents-fail-before-they-write-patches">Background: coding agents fail before they write patches</a>
+<a href="#what-existing-code-retrieval-benchmarks-miss">What existing code retrieval benchmarks miss</a>
+<a href="#three-representative-examples">Three representative examples</a>
+<a href="#research-questions">Research questions</a>
+<a href="#design-principles">Design principles</a>
+<a href="#what-is-in-v1">What is in V1?</a>
+<a href="#what-does-each-task-measure">What does each task measure?</a>
+<a href="#baselines">Baselines</a>
+<a href="#current-results">Current results</a>
+<a href="#why-does-repomap-work-well-on-trace2code">Why does RepoMap work well on <code>trace2code</code>?</a>
+<a href="#data-construction-principles">Data construction principles</a>
+<a href="#how-to-reproduce">How to reproduce</a>
+<a href="#next-v1-1">Next: V1.1</a>
+<a href="#closing">Closing</a>
       </aside>
     </div>
   </main>
   <footer>
-    <div class="wrap">Agent Retrieval Bench V1 · Static project page generated from the public technical blog.</div>
+    <div class="wrap">Agent Retrieval Bench V1 · Static project page generated from the English technical blog.</div>
   </footer>
 </body>
 </html>
