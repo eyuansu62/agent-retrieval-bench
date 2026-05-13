@@ -1,10 +1,19 @@
 # Agent Retrieval Bench
 
+[![Project Page](https://img.shields.io/badge/project-page-72f0b6)](https://agent-retrieval-bench.github.io/)
+[![Dataset](https://img.shields.io/badge/Hugging%20Face-dataset-yellow)](https://huggingface.co/datasets/eyuansu71/agent_retrieval_bench)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Citation](https://img.shields.io/badge/citation-CFF-lightgrey)](CITATION.cff)
+
+**Links:** [Project page](https://agent-retrieval-bench.github.io/) · [Technical blog](https://agent-retrieval-bench.github.io/blog.html) · [Hugging Face dataset](https://huggingface.co/datasets/eyuansu71/agent_retrieval_bench) · [Leaderboard](https://huggingface.co/datasets/eyuansu71/agent_retrieval_bench/blob/main/reports/v1/model_leaderboard.md)
+
 Agent Retrieval Bench is an action-oriented code retrieval benchmark for coding agents. It evaluates whether a retriever can find the repository files an agent would need for real coding workflows.
 
 The current public release is **Agent Retrieval Bench V1**: 225 manually curated samples across `code2test`, `comment2context`, and `trace2code`.
 
 Project page: https://agent-retrieval-bench.github.io/
+
+Licensing note: evaluator code, benchmark metadata, reports, and documentation are MIT licensed; redistributed corpus chunks remain governed by their upstream repository licenses. See [DATA_LICENSE.md](DATA_LICENSE.md).
 
 Raw crawling, weak-label generation, and audit workflows are intentionally not documented as the public path. Use this repository to run evaluations against the released benchmark artifacts on Hugging Face.
 
@@ -203,3 +212,19 @@ Current results show that Qwen is strongest overall and on `code2test`, Jina is 
 Legacy V0.2 remains available under `data/benchmark/v0_2/`, and the earlier V1 Code Review track remains available under `data/benchmark/v1_code_review/`. New model comparisons should report full V1 as the primary benchmark.
 
 Future data collection should target V1.1: expand `comment2context` to 80-100 samples and `trace2code` to 100+ samples, while leaving `benchmark/v1` frozen.
+
+## Citation
+
+There is no paper yet. For now, cite the project page and dataset:
+
+```bibtex
+@misc{agent_retrieval_bench_v1,
+  title        = {Agent Retrieval Bench V1},
+  author       = {{Agent Retrieval Bench contributors}},
+  year         = {2026},
+  howpublished = {\url{https://agent-retrieval-bench.github.io/}},
+  note         = {Dataset: \url{https://huggingface.co/datasets/eyuansu71/agent_retrieval_bench}}
+}
+```
+
+A machine-readable citation file is available in [CITATION.cff](CITATION.cff).

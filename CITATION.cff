@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+title: Agent Retrieval Bench V1
+message: "If you use Agent Retrieval Bench, please cite the project page and dataset."
+type: dataset
+authors:
+  - name: Agent Retrieval Bench contributors
+url: https://agent-retrieval-bench.github.io/
+repository-code: https://github.com/eyuansu62/agent-retrieval-bench
+repository-artifact: https://huggingface.co/datasets/eyuansu71/agent_retrieval_bench
+date-released: "2026-05-07"
+version: "v1"
+abstract: >-
+  Agent Retrieval Bench V1 is a curated benchmark for evaluating whether
+  retrievers can find the repository files coding agents need across code2test,
+  comment2context, and trace2code tasks.
+keywords:
+  - code retrieval
+  - coding agents
+  - software engineering
+  - retrieval benchmark
+  - agentic retrieval
+license: MIT
