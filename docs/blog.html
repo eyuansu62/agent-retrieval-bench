@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Agent Retrieval Bench V1：面向 Coding Agent 的代码检索基准 · Agent Retrieval Bench</title>
+  <meta name="description" content="Agent Retrieval Bench V1 的动机、任务设计、数据构建方式、baseline 结果与后续方向。" />
+  <style>
+    :root {
+      --bg: #07100d;
+      --panel: rgba(238, 247, 241, 0.055);
+      --panel-strong: rgba(238, 247, 241, 0.095);
+      --text: #eff8f2;
+      --muted: #a8bbb1;
+      --soft: #cad8d0;
+      --line: rgba(214, 239, 225, 0.14);
+      --accent: #69e7ad;
+      --accent-2: #b8f7d6;
+      --code: #0e1b17;
+      --max: 900px;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at 18% 0%, rgba(105, 231, 173, 0.10), transparent 30%),
+        linear-gradient(180deg, #07100d 0%, #0a1512 42%, #08110f 100%);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      line-height: 1.7;
+    }
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(rgba(238,247,241,.045) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(238,247,241,.045) 1px, transparent 1px);
+      background-size: 96px 96px;
+      mask-image: linear-gradient(to bottom, black, transparent 76%);
+    }
+    a { color: var(--accent-2); text-decoration: none; }
+    a:hover { color: var(--accent); }
+    .wrap { width: min(1180px, calc(100% - 48px)); margin: 0 auto; position: relative; }
+    header { padding: 26px 0 18px; border-bottom: 1px solid var(--line); backdrop-filter: blur(12px); }
+    .nav { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+    .brand { font-size: 13px; letter-spacing: .16em; text-transform: uppercase; color: var(--accent); font-weight: 650; }
+    .nav-links { display: flex; gap: 14px; flex-wrap: wrap; font-size: 14px; color: var(--muted); }
+    .hero { padding: 78px 0 42px; }
+    .eyebrow { color: var(--accent); font-size: 13px; letter-spacing: .18em; text-transform: uppercase; font-weight: 700; margin-bottom: 22px; }
+    h1 { max-width: 980px; margin: 0; font-size: clamp(42px, 6vw, 74px); line-height: 0.98; letter-spacing: -0.055em; font-weight: 700; }
+    .lead { max-width: 760px; margin: 26px 0 0; color: var(--soft); font-size: clamp(18px, 2vw, 22px); line-height: 1.75; }
+    .meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 28px; }
+    .pill { border: 1px solid var(--line); background: var(--panel); color: var(--soft); border-radius: 999px; padding: 8px 12px; font-size: 13px; }
+    .layout { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 54px; align-items: start; padding: 24px 0 88px; }
+    article { max-width: var(--max); min-width: 0; }
+    .toc { position: sticky; top: 24px; border: 1px solid var(--line); background: var(--panel); border-radius: 20px; padding: 18px; }
+    .toc h2 { margin: 0 0 12px; padding: 0; border: 0; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .14em; }
+    .toc a { display: block; padding: 7px 0; color: var(--soft); font-size: 14px; line-height: 1.35; }
+    article h2 { margin: 68px 0 18px; padding-top: 26px; border-top: 1px solid var(--line); font-size: clamp(28px, 3vw, 38px); line-height: 1.16; letter-spacing: -0.035em; font-weight: 680; }
+    article h3 { margin: 36px 0 12px; font-size: 22px; line-height: 1.25; letter-spacing: -0.025em; font-weight: 680; color: #f4fbf7; }
+    article p { margin: 16px 0; color: var(--soft); font-size: 17px; }
+    article strong { color: var(--text); font-weight: 700; }
+    article ul, article ol { margin: 16px 0 22px; padding-left: 24px; color: var(--soft); font-size: 17px; }
+    article li { margin: 8px 0; }
+    blockquote { margin: 28px 0; padding: 18px 22px; border-left: 3px solid var(--accent); background: var(--panel); border-radius: 0 16px 16px 0; color: var(--soft); }
+    code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; font-size: .92em; color: #c6ffe2; background: rgba(105,231,173,.10); border: 1px solid rgba(105,231,173,.16); border-radius: 6px; padding: .12em .36em; }
+    pre { overflow-x: auto; padding: 18px; background: var(--code); border: 1px solid var(--line); border-radius: 16px; box-shadow: inset 0 1px 0 rgba(255,255,255,.03); }
+    pre code { display: block; padding: 0; border: 0; background: transparent; color: #e6fff2; font-size: 14px; line-height: 1.62; }
+    .table-scroll { overflow-x: auto; margin: 22px 0 28px; border: 1px solid var(--line); border-radius: 16px; background: rgba(238,247,241,.04); }
+    table { width: 100%; border-collapse: collapse; min-width: 620px; }
+    th, td { padding: 12px 14px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; color: var(--soft); font-size: 14px; }
+    th { color: var(--text); font-weight: 700; background: rgba(238,247,241,.05); }
+    tr:last-child td { border-bottom: 0; }
+    footer { border-top: 1px solid var(--line); padding: 28px 0 42px; color: var(--muted); font-size: 14px; }
+    @media (max-width: 980px) {
+      .layout { grid-template-columns: 1fr; gap: 20px; }
+      .toc { position: static; order: -1; }
+      .toc a { display: inline-block; margin-right: 12px; }
+    }
+    @media (max-width: 640px) {
+      .wrap { width: min(100% - 28px, 1180px); }
+      .hero { padding-top: 54px; }
+      .nav { align-items: flex-start; flex-direction: column; }
+      article p, article ul, article ol { font-size: 16px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap nav">
+      <a class="brand" href="./">Agent Retrieval Bench</a>
+      <nav class="nav-links" aria-label="Primary">
+        <a href="./">Home</a>
+        <a href="https://huggingface.co/datasets/eyuansu71/agent_retrieval_bench">Dataset</a>
+        <a href="https://github.com/eyuansu62/agent-retrieval-bench">GitHub</a>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <section class="wrap hero">
+      <div class="eyebrow">Technical Blog · Full V1</div>
+      <h1>Agent Retrieval Bench V1：面向 Coding Agent 的代码检索基准</h1>
+      <p class="lead">本文介绍 Agent Retrieval Bench V1 的动机、任务设计、数据构建方式、首批 baseline 结果，以及下一阶段 V1.1 的方向。</p>
+      <div class="meta">
+        <span class="pill">225 curated samples</span>
+        <span class="pill">code2test · comment2context · trace2code</span>
+        <span class="pill">lexical · RepoMap · embedding baselines</span>
+      </div>
+    </section>
+    <div class="wrap layout">
+      <article>
+<h2 id="背景-coding-agent-的瓶颈不只在生成代码">背景：coding agent 的瓶颈不只在生成代码</h2>
+<p>过去两年，代码模型和 coding agent 的评测重点大多集中在“最终能不能写出正确 patch”。这当然重要，但在真实软件工程任务里，patch 生成通常不是第一步。一个 agent 在动手修改之前，必须先完成一系列上下文定位工作：理解仓库结构、找到相关实现、找到已有测试、判断失败日志对应的 root cause、识别 review comment 背后的设计约束。</p>
+<p>换句话说，coding agent 的能力链条至少包含三个阶段：</p>
+<ol><li><strong>检索上下文</strong>：从一个大仓库里找到需要阅读的文件。</li><li><strong>推理和规划</strong>：理解这些文件之间的关系，判断该怎么改。</li><li><strong>生成和验证 patch</strong>：修改代码、运行测试、迭代修复。</li></ol>
+<p>现有很多 benchmark 主要评估第三步，或者把第一步隐含在端到端任务里。这样会带来一个问题：当 agent 失败时，我们很难区分失败原因到底是“不会写 patch”，还是“一开始就没找到该看的文件”。在真实仓库中，后者非常常见。一个模型即使具备很强的代码生成能力，如果上下文检索错了，也会产生看似合理但实际无效的修改。</p>
+<p>Agent Retrieval Bench 的出发点就是把这个前置能力单独拿出来测：<strong>给定一个真实 coding workflow 中的任务信号，retriever 能不能把 agent 带到正确的文件附近？</strong></p>
+<h2 id="现有代码检索评测缺了什么">现有代码检索评测缺了什么？</h2>
+<p>传统代码检索通常被建模为一个相对直接的信息检索问题：给定自然语言 query，找语义相近的代码片段；或者给定代码片段，找相似实现。这类设定对搜索 API、代码问答、snippet retrieval 很有价值，但它和 coding agent 的实际上下文需求并不完全一致。</p>
+<p>真实 agentic workflow 中的 query 往往不是“我要找实现 X”。它可能是：</p>
+<ul><li>一个 PR title/body，描述的是行为变化，而不是测试文件名。</li><li>一个 review comment，只指出局部问题，但真正需要看的约束在别的模块。</li><li>一段失败日志，包含测试名、panic、assertion、stack trace，但 root cause 可能不在 trace frame 里。</li><li>一个迁移或兼容性任务，影响范围跨配置、runtime、测试和文档。</li></ul>
+<p>这些场景有几个共同特点。</p>
+<p>第一，<strong>gold 文件不一定和 query 语义相近</strong>。例如 <code>trace2code</code> 中，失败日志可能只出现测试函数名，但真正需要找的是 source file 中的行为实现。Embedding 模型如果只依赖语义相似度，可能会优先返回测试文件或日志中直接出现的路径。</p>
+<p>第二，<strong>文件关系比单文件语义更重要</strong>。Source/test 映射、package/module 结构、symbol reference、reviewed file 与上下文文件之间的依赖关系，经常决定什么文件应该被找回。这类信号更接近 repo graph，而不是单纯文本相似度。</p>
+<p>第三，<strong>泄漏很容易发生</strong>。如果 query 中直接包含 gold path、test basename、fix diff 或后续 patch 内容，检索任务会退化成路径匹配。这样的样本会高估系统能力，尤其会让 lexical baseline 看起来异常强。</p>
+<p>第四，<strong>端到端 agent 成功率无法解释检索质量</strong>。一个 agent 可能因为工具、测试环境、patch 生成、依赖安装等原因失败；也可能靠很强的模型推理弥补检索错误。我们需要一个更小、更可诊断的 benchmark，专门衡量 retrieval 这一环。</p>
+<p>因此，我们把问题重新定义为 <strong>agentic retrieval</strong>：不是找“语义最像的代码”，而是找“agent 为了完成任务必须阅读的仓库文件”。</p>
+<h2 id="三个代表性例子">三个代表性例子</h2>
+<p>为了说明这个问题不是人为构造出来的，我们可以看三个简化后的任务形态。它们不是完整 PR 复盘，而是从 V1 数据构建过程中反复出现的模式中抽象出来的 representative examples。</p>
+<h3 id="例子一-pr-intent-不直接指向测试文件">例子一：PR intent 不直接指向测试文件</h3>
+<p>Agent 看到的信号可能是一个 PR 描述：</p>
+<blockquote><p>Add support for optional values in shell completion.</p></blockquote>
+<p>这个 query 很自然地会命中 completion engine 的实现文件，因为 “optional values” 和 “completion” 都是实现侧概念。但如果 agent 的任务是补测试或验证行为，它真正需要找的可能是不同 shell backend 的 completion tests，例如 bash、fish、PowerShell 或 elvish 的测试快照。</p>
+<p>容易犯的错误是：retriever 只返回实现文件，或者返回文档和 changelog。这样的结果对理解实现有帮助，但对“应该改哪些测试”帮助有限。</p>
+<p>这个例子说明 <code>code2test</code> 不是简单的文本相似检索。测试文件名不一定出现在 PR 描述里，甚至测试文件可能和实现文件不在同一目录。retriever 需要学到 source→test 映射、模块边界和行为覆盖关系。</p>
+<h3 id="例子二-review-comment-所在文件不是完整上下文">例子二：review comment 所在文件不是完整上下文</h3>
+<p>Review comment 往往落在某个具体 hunk 上，例如 reviewer 在一个 endpoint 或 serializer 的实现附近问：</p>
+<blockquote><p>Should this be sanitized consistently with the web response path?</p></blockquote>
+<p>如果把任务简化成“找 comment 所在文件”，这个样本会非常容易。但对 coding agent 来说，被评论文件只是已经给定的局部上下文。真正需要看的可能是：</p>
+<ul><li>另一个 web extension 中已有的 sanitize 逻辑；</li><li>相关配置属性；</li><li>已有 endpoint tests；</li><li>文档中定义的 masking/sanitization 行为。</li></ul>
+<p>容易犯的错误是：retriever 把 comment 所在文件排第一，然后认为任务完成。但 agent 实际上还缺少判断一致性的依据。</p>
+<p>这就是 <code>comment2context</code> 的 motivation：我们把 comment 所在文件放入 <code>given_files</code>，不作为主指标 gold；模型必须找的是额外上下文。这样才能测出 review 场景中真正有价值的 retrieval 能力。</p>
+<h3 id="例子三-failure-trace-经常指向测试-而不是-root-cause">例子三：failure trace 经常指向测试，而不是 root cause</h3>
+<p>失败日志里最明显的路径往往是测试文件。例如一个 Go 或 Python 测试失败可能只显示：</p>
+<pre><code class="language-text">--- FAIL: TestOptionalCompletion
+    completion_test.go:42: expected candidates [...], got [...]</code></pre>
+<p>或者一个 panic/traceback 的顶部 frame 在 test helper 中。直接路径匹配会优先返回 <code>completion_test.go</code>。但如果测试文件只是复现信号，真正要修改的可能是 completion engine、argument parser、runtime config 或某个 source module。</p>
+<p>容易犯的错误是：把 trace 中出现的测试文件当成 root cause。对于人类工程师来说，测试文件告诉你“哪里失败了”，不一定告诉你“哪里错了”。Agent 也一样。</p>
+<p>这就是 <code>trace2code</code> 的核心：gold 是人工审核过的 root-cause source files，related tests 只作为辅助信息。这个任务要求 retriever 从 failure text、repo structure、source/test 关系和局部符号信号中推断 root cause，而不是做 trace-frame lookup。</p>
+<p>这三个例子共同说明：agentic retrieval 的难点不在于 query 没有信息，而在于 query 的信息经常是间接的。一个好的 retriever 需要把局部信号映射到完成任务所需的仓库上下文。</p>
+<h2 id="我们想回答的研究问题">我们想回答的研究问题</h2>
+<p>Agent Retrieval Bench V1 不是为了证明某一种检索方法最好，而是为了提供一个能区分不同检索机制的诊断面。我们特别关心几个问题：</p>
+<ol><li><strong>语义 embedding 是否足够？</strong></li></ol>
+<p>如果任务信号来自 PR、review comment 或 failure trace，向量检索是否仍然稳定优于 lexical 和结构化方法？</p>
+<ol><li><strong>vectorless repo map 是否有独立价值？</strong></li></ol>
+<p>Aider-style RepoMap 这类方法不依赖 embedding，而是利用 symbol、path、reference 和 source/test 关系。它是否能在某些 agent 场景里超过 embedding？</p>
+<ol><li><strong>不同任务是否需要不同 retrieval bias？</strong></li></ol>
+<p><code>code2test</code>、<code>comment2context</code>、<code>trace2code</code> 看似都是“找文件”，但它们依赖的信号完全不同。一个统一 retriever 是否会在任务之间表现不均衡？</p>
+<ol><li><strong>能否构造一个不会被路径泄漏和同名测试支配的 benchmark？</strong></li></ol>
+<p>如果 benchmark 太容易，lexical baseline 接近 ceiling，就很难判断高级 retriever 是否真的有用。V1 的设计目标之一，是让任务保持可解但不被简单路径匹配解决。</p>
+<p>这些问题决定了 V1 的数据策略：我们不追求一开始就做成数千条样本，而是先做一个小而硬、人工审核、可复现、能暴露方法差异的版本。</p>
+<h2 id="设计原则">设计原则</h2>
+<p>V1 的设计遵循几个原则。</p>
+<p><strong>第一，评测对象是 file-level retrieval。</strong> Coding agent 最终需要的是可读上下文文件，而不只是单个 chunk。我们仍然用 chunked corpus 支持 ranking 和 8k budget 统计，但主指标围绕 gold file 是否被找回。</p>
+<p><strong>第二，候选 corpus 固定在 base commit。</strong> 每条样本都在任务发生前的仓库状态上评测。后续修复、PR final diff、人工 gold 证据都不能进入 query 或候选 corpus。这样可以避免把答案泄漏到索引里。</p>
+<p><strong>第三，query 尽量模拟 agent 实际可见信息。</strong> <code>code2test</code> 使用 PR 意图和实现变化描述；<code>comment2context</code> 使用 review comment 和给定文件；<code>trace2code</code> 使用本地复现产生的 failure excerpt。query 不包含 fix patch、raw diff 或 gold 路径。</p>
+<p><strong>第四，gold 必须是“完成任务需要看的文件”。</strong> 尤其在 <code>comment2context</code> 中，comment 所在文件只是 given context，不参与主 Recall；在 <code>trace2code</code> 中，测试文件可以是 related tests，但主 gold 必须是 root-cause source file。</p>
+<p><strong>第五，保留多种 baseline。</strong> 我们同时报告 lexical、RepoMap、Jina 和 Qwen，不把 benchmark 绑定到某一种检索范式。一个好的 agent retrieval benchmark 应该能显示不同归纳偏置的优缺点。</p>
+<p>这也是 V1 的核心 motivation：构建一个足够接近 coding agent 工作流、又足够可控和可解释的检索评测层。</p>
+<h2 id="v1-包含什么">V1 包含什么？</h2>
+<p>Agent Retrieval Bench V1 是当前冻结的主 benchmark。它包含 225 条人工 curated 样本，覆盖三类任务：</p>
+<div class="table-scroll"><table><thead><tr>
+<th>任务</th>
+<th>样本数</th>
+<th>评测目标</th>
+</tr></thead><tbody>
+<tr>
+<td><code>code2test</code></td>
+<td>106</td>
+<td>给定实现变化或 PR 意图，找相关测试文件</td>
+</tr>
+<tr>
+<td><code>comment2context</code></td>
+<td>51</td>
+<td>给定 review comment 和被评论文件，找额外必须看的上下文文件</td>
+</tr>
+<tr>
+<td><code>trace2code</code></td>
+<td>68</td>
+<td>给定真实复现的失败 trace，找 root-cause source files</td>
+</tr>
+<tr>
+<td><strong>总计</strong></td>
+<td><strong>225</strong></td>
+<td></td>
+</tr>
+</tbody></table></div>
+<p>每条样本都在 <code>repo_at_base_commit</code> 上评测。也就是说，候选 corpus 是修复前的仓库状态，后续 patch 不会进入索引。这样可以避免把答案泄漏给检索器。</p>
+<p>V1 还附带了完整 corpus、baseline 输出和报告。用户可以通过一条命令下载：</p>
+<pre><code class="language-bash">arb download-benchmark --version v1 --local-dir data --force</code></pre>
+<p>这条命令会自动从 Hugging Face 下载 release bundle、校验 checksum，并解压出：</p>
+<pre><code class="language-text">benchmark/v1/
+corpus/v1/
+eval/v1/
+reports/v1/</code></pre>
+<h2 id="三个任务分别在测什么">三个任务分别在测什么？</h2>
+<h3 id="1-code2test-实现变化应该对应哪些测试">1. <code>code2test</code>：实现变化应该对应哪些测试？</h3>
+<p>这个任务模拟 agent 收到一个 PR 或实现变更意图后，需要判断应该看哪些测试文件。query 中不会直接给出测试路径或测试文件 basename。gold 是人工确认的相关测试文件。</p>
+<p>它考察的是跨 source/test 的结构联想能力，而不是文件名匹配能力。</p>
+<h3 id="2-comment2context-review-comment-之外还要看什么">2. <code>comment2context</code>：review comment 之外还要看什么？</h3>
+<p>Review comment 通常落在某个具体文件上，但 reviewer 的真实意图经常依赖其他上下文：API 约束、配置行为、已有测试、另一个模块的实现等。</p>
+<p>V1 中 <code>comment2context</code> 把 comment 所在文件视为 given context，不计入主指标。模型必须找的是额外上下文文件。这一点很重要，否则任务会退化成“找到 comment 所在文件”。</p>
+<h3 id="3-trace2code-失败-trace-的-root-cause-在哪里">3. <code>trace2code</code>：失败 trace 的 root cause 在哪里？</h3>
+<p><code>trace2code</code> 来自本地测试复现产生的 failure trace，包括 compile error、assertion failure、panic 等。主 gold 是人工审核过的 root-cause source files；相关测试文件只作为辅助信息，不作为主 gold。</p>
+<p>这个任务故意不奖励“trace frame path lookup”。如果 trace 里只有测试文件，模型仍然需要借助仓库结构和 failure signal 推断真正相关的 source file。</p>
+<h2 id="baseline-我们测了哪些方法">Baseline：我们测了哪些方法？</h2>
+<p>V1 附带四类 baseline：</p>
+<ol><li><strong>lexical</strong>：传统词法检索。</li><li><strong>aider-style-repomap</strong>：不使用向量的 RepoMap baseline，通过 file/symbol/reference graph 和 query-aware ranking 排文件。</li><li><strong>jina-code-embeddings-0.5b</strong>：代码 embedding 模型。</li><li><strong>Qwen3-Embedding-4B</strong>：通用/代码能力更强的 embedding 模型。</li></ol>
+<p>主排序指标是 overall <code>MRR</code>，同时报告 <code>Recall@5/10/20</code> 和 <code>gold_coverage@8k</code>。</p>
+<h2 id="当前结果">当前结果</h2>
+<p>整体结果如下：</p>
+<div class="table-scroll"><table><thead><tr>
+<th>Model</th>
+<th>Samples</th>
+<th>Recall@5</th>
+<th>Recall@10</th>
+<th>Recall@20</th>
+<th>MRR</th>
+<th>Gold@8k</th>
+</tr></thead><tbody>
+<tr>
+<td>Qwen3-Embedding-4B</td>
+<td>225</td>
+<td>0.2883</td>
+<td>0.4033</td>
+<td>0.5828</td>
+<td>0.2455</td>
+<td>0.2542</td>
+</tr>
+<tr>
+<td>aider-style-repomap</td>
+<td>225</td>
+<td>0.3089</td>
+<td>0.4705</td>
+<td>0.6299</td>
+<td>0.2227</td>
+<td>0.0704</td>
+</tr>
+<tr>
+<td>jina-code-embeddings-0.5b</td>
+<td>225</td>
+<td>0.2230</td>
+<td>0.3133</td>
+<td>0.4492</td>
+<td>0.1883</td>
+<td>0.1556</td>
+</tr>
+<tr>
+<td>lexical</td>
+<td>225</td>
+<td>0.1970</td>
+<td>0.3267</td>
+<td>0.4874</td>
+<td>0.1450</td>
+<td>0.0785</td>
+</tr>
+</tbody></table></div>
+<p>按任务拆开看，结论更有意思：</p>
+<div class="table-scroll"><table><thead><tr>
+<th>任务</th>
+<th>最强 MRR 模型</th>
+<th>MRR</th>
+<th>最强 Recall@20 模型</th>
+<th>Recall@20</th>
+</tr></thead><tbody>
+<tr>
+<td>overall</td>
+<td>Qwen3-Embedding-4B</td>
+<td>0.2455</td>
+<td>aider-style-repomap</td>
+<td>0.6299</td>
+</tr>
+<tr>
+<td>code2test</td>
+<td>Qwen3-Embedding-4B</td>
+<td>0.3225</td>
+<td>Qwen3-Embedding-4B</td>
+<td>0.7230</td>
+</tr>
+<tr>
+<td>comment2context</td>
+<td>jina-code-embeddings-0.5b</td>
+<td>0.3282</td>
+<td>lexical</td>
+<td>0.5752</td>
+</tr>
+<tr>
+<td>trace2code</td>
+<td>aider-style-repomap</td>
+<td>0.2750</td>
+<td>aider-style-repomap</td>
+<td>0.8064</td>
+</tr>
+</tbody></table></div>
+<p>几个直接观察：</p>
+<ul><li>Qwen3-Embedding-4B 在 overall MRR 和 <code>code2test</code> 上最强。</li><li>Jina 在 <code>comment2context</code> 上 MRR 最强。</li><li>RepoMap 在 <code>trace2code</code> 上明显强于 embedding，并且 overall Recall@20 最高。</li><li><code>trace2code</code> 对 embedding 不友好，这不是数据错误，而是一个有价值的信号：失败日志定位更依赖结构、路径、调用关系和 repo graph，而不只是语义相似度。</li></ul>
+<h2 id="为什么-repomap-在-trace2code-上强">为什么 RepoMap 在 trace2code 上强？</h2>
+<p>这和任务本身有关。</p>
+<p>Embedding 模型擅长把自然语言 query 和语义相近的代码放近。但 failure trace 经常包含：</p>
+<ul><li>文件路径片段；</li><li>函数名；</li><li>package/module 名；</li><li>测试名；</li><li>panic/assertion 的局部文本。</li></ul>
+<p>这些信号不一定和 root-cause source file 的语义描述相近，但它们在仓库结构图里很有用。RepoMap baseline 用 file/symbol/reference graph 做 query-aware ranking，因此更容易利用这些结构信号。</p>
+<p>这也说明：agentic retrieval 不应该只有 vector baseline。对于某些 coding agent 场景，vectorless repo map、symbol graph、dependency graph 可能比 embedding 更契合。</p>
+<h2 id="数据构建原则">数据构建原则</h2>
+<p>V1 最重要的原则是：宁可少，也不要把简单或泄漏样本混进去。</p>
+<p>我们做了几件事：</p>
+<ul><li>V1 样本全部人工 curated。</li><li>查询中避免直接出现 gold path、basename、raw patch、fix diff。</li><li><code>comment2context</code> 不把 comment 所在文件作为主 gold。</li><li><code>trace2code</code> 只把 root-cause source files 作为主 gold，测试文件只能做辅助信息。</li><li>所有样本都在 base commit corpus 上评测，避免用修复后的文件污染候选集。</li></ul>
+<p>最终审核结果中，V1 保留 225 条，另有 222 条被丢弃或标为不适合进入主 benchmark。</p>
+<h2 id="如何复现">如何复现？</h2>
+<p>安装 evaluator：</p>
+<pre><code class="language-bash">pip install &quot;git+https://github.com/eyuansu62/agent-retrieval-bench.git&quot;</code></pre>
+<p>下载 V1：</p>
+<pre><code class="language-bash">arb download-benchmark --version v1 --local-dir data --force</code></pre>
+<p>验证样本：</p>
+<pre><code class="language-bash">arb validate data/benchmark/v1/*.jsonl</code></pre>
+<p>跑 lexical baseline：</p>
+<pre><code class="language-bash">arb eval-baseline \
+  --derived data/benchmark/v1 \
+  --corpus data/corpus/v1 \
+  --out data/eval/v1/lexical_summary.json \
+  --details data/eval/v1/lexical_details.jsonl \
+  --no-keep-list</code></pre>
+<p>跑 RepoMap baseline：</p>
+<pre><code class="language-bash">arb eval-repomap \
+  --derived data/benchmark/v1 \
+  --corpus data/corpus/v1 \
+  --out data/eval/v1/repomap_summary.json \
+  --details data/eval/v1/repomap_details.jsonl \
+  --candidate-filter all_files \
+  --no-keep-list</code></pre>
+<p>生成 leaderboard：</p>
+<pre><code class="language-bash">arb report-models \
+  --eval-dir data/eval/v1 \
+  --out data/reports/v1/model_leaderboard.md \
+  --json-out data/reports/v1/model_leaderboard.json</code></pre>
+<p>数据在 Hugging Face：<code>eyuansu71/agent_retrieval_bench</code>。代码在 GitHub：<code>eyuansu62/agent-retrieval-bench</code>。</p>
+<h2 id="下一步-v1-1">下一步：V1.1</h2>
+<p>V1 已冻结，后续不会修改 <code>benchmark/v1</code>。下一步会做 V1.1，重点不是盲目扩大总量，而是定向补薄弱任务：</p>
+<ul><li><code>comment2context</code>：从 51 扩到 80–100，优先跨模块、无路径泄漏、非同目录上下文。</li><li><code>trace2code</code>：从 68 扩到 100+，增加非 Go repo、更多语言和更多 failure 类型。</li><li><code>code2test</code>：当前已有 106 条，暂不默认扩充。</li></ul>
+<p>长期看，我们希望 Agent Retrieval Bench 能覆盖更多真实 coding agent 场景，例如 issue/bug report → code、migration task → affected files、API usage → implementation 等。但 V1 的第一步，是先把 code review、test retrieval 和 trace root-cause retrieval 三个核心能力测清楚。</p>
+<h2 id="结语">结语</h2>
+<p>Agent 的能力上限不只取决于模型会不会生成 patch，也取决于它能不能在大仓库里找到该看的文件。</p>
+<p>Agent Retrieval Bench V1 想测的正是这个前置能力：面对 PR 意图、review comment、失败 trace，一个 retriever 能不能把 agent 带到正确的上下文附近。</p>
+<p>从首批结果看，embedding、lexical 和 RepoMap 各有优势，没有一种方法在所有任务上统治。这说明 agentic retrieval 很可能需要混合路线：语义向量、结构图、符号索引和任务感知 ranking 需要一起工作。</p>
+      </article>
+      <aside class="toc" aria-label="Table of contents">
+        <h2>Contents</h2>
+<a href="#背景-coding-agent-的瓶颈不只在生成代码">背景：coding agent 的瓶颈不只在生成代码</a>
+<a href="#现有代码检索评测缺了什么">现有代码检索评测缺了什么？</a>
+<a href="#三个代表性例子">三个代表性例子</a>
+<a href="#我们想回答的研究问题">我们想回答的研究问题</a>
+<a href="#设计原则">设计原则</a>
+<a href="#v1-包含什么">V1 包含什么？</a>
+<a href="#三个任务分别在测什么">三个任务分别在测什么？</a>
+<a href="#baseline-我们测了哪些方法">Baseline：我们测了哪些方法？</a>
+<a href="#当前结果">当前结果</a>
+<a href="#为什么-repomap-在-trace2code-上强">为什么 RepoMap 在 trace2code 上强？</a>
+<a href="#数据构建原则">数据构建原则</a>
+<a href="#如何复现">如何复现？</a>
+<a href="#下一步-v1-1">下一步：V1.1</a>
+<a href="#结语">结语</a>
+      </aside>
+    </div>
+  </main>
+  <footer>
+    <div class="wrap">Agent Retrieval Bench V1 · Static project page generated from the public technical blog.</div>
+  </footer>
+</body>
+</html>

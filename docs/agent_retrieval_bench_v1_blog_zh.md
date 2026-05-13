@@ -1,6 +1,6 @@
 # Agent Retrieval Bench V1：面向 Coding Agent 的代码检索基准
 
-> 工作草稿。本文介绍 Agent Retrieval Bench V1 的动机、任务设计、数据构建方式、首批 baseline 结果，以及下一阶段 V1.1 的方向。
+> 本文介绍 Agent Retrieval Bench V1 的动机、任务设计、数据构建方式、首批 baseline 结果，以及下一阶段 V1.1 的方向。
 
 ## 背景：coding agent 的瓶颈不只在生成代码
 
