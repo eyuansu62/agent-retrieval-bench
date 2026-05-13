@@ -5,6 +5,8 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Citation](https://img.shields.io/badge/citation-CFF-lightgrey)](CITATION.cff)
 
+![Agent Retrieval Bench V1 overview](docs/assets/agent-retrieval-bench-v1-card.png)
+
 **Links:** [Project page](https://agent-retrieval-bench.github.io/) · [Technical blog](https://agent-retrieval-bench.github.io/blog.html) · [Hugging Face dataset](https://huggingface.co/datasets/eyuansu71/agent_retrieval_bench) · [Leaderboard](https://huggingface.co/datasets/eyuansu71/agent_retrieval_bench/blob/main/reports/v1/model_leaderboard.md)
 
 Agent Retrieval Bench is an action-oriented code retrieval benchmark for coding agents. It evaluates whether a retriever can find the repository files an agent would need for real coding workflows.
