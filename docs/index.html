@@ -263,6 +263,53 @@
       color: var(--soft);
     }
 
+    .leaderboard {
+      display: grid;
+      grid-template-columns: minmax(0, 0.7fr) minmax(420px, 1fr);
+      gap: 52px;
+      align-items: start;
+    }
+
+    .table {
+      border-top: 1px solid var(--line);
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: minmax(170px, 1fr) 70px 70px 70px;
+      gap: 18px;
+      align-items: baseline;
+      padding: 16px 0;
+      border-bottom: 1px solid var(--line);
+      color: var(--soft);
+      font-size: 15px;
+    }
+
+    .row.head {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .model {
+      color: var(--fg);
+      font-weight: 680;
+      letter-spacing: -0.02em;
+    }
+
+    .metric {
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+    }
+
+    .leaderboard-note {
+      margin-top: 14px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
     pre {
       margin: 26px 0 0;
       overflow-x: auto;
@@ -314,9 +361,10 @@
       nav { align-items: flex-start; flex-direction: column; }
       .nav-links { gap: 14px; flex-wrap: wrap; }
       .hero { min-height: auto; padding: 68px 0 64px; }
-      .blog-panel, .split { grid-template-columns: 1fr; }
+      .blog-panel, .split, .leaderboard { grid-template-columns: 1fr; }
       .fact-list { border-left: 0; padding-left: 0; }
       .task { grid-template-columns: 1fr; gap: 8px; }
+      .row { grid-template-columns: minmax(140px, 1fr) 60px 60px 60px; gap: 10px; }
     }
   </style>
 </head>
@@ -389,6 +437,54 @@
           <div class="task">
             <code>trace2code</code>
             <p>Given a reproduced failure trace, retrieve audited root-cause source files.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="leaderboard">
+      <div class="wrap leaderboard">
+        <div>
+          <div class="section-kicker">V1 leaderboard</div>
+          <h2>Embeddings lead overall, but structure matters.</h2>
+          <p class="section-copy">Full V1 reports lexical, vectorless RepoMap, and embedding baselines on the same 225 curated samples. Overall MRR is the primary ranking metric.</p>
+        </div>
+        <div>
+          <div class="table" role="table" aria-label="Overall V1 leaderboard">
+            <div class="row head" role="row">
+              <div role="columnheader">Model</div>
+              <div class="metric" role="columnheader">MRR</div>
+              <div class="metric" role="columnheader">R@10</div>
+              <div class="metric" role="columnheader">R@20</div>
+            </div>
+            <div class="row" role="row">
+              <div class="model" role="cell">Qwen3-Embedding-4B</div>
+              <div class="metric" role="cell">0.2455</div>
+              <div class="metric" role="cell">0.4033</div>
+              <div class="metric" role="cell">0.5828</div>
+            </div>
+            <div class="row" role="row">
+              <div class="model" role="cell">aider-style-repomap</div>
+              <div class="metric" role="cell">0.2227</div>
+              <div class="metric" role="cell">0.4705</div>
+              <div class="metric" role="cell">0.6299</div>
+            </div>
+            <div class="row" role="row">
+              <div class="model" role="cell">jina-code-embeddings-0.5b</div>
+              <div class="metric" role="cell">0.1883</div>
+              <div class="metric" role="cell">0.3133</div>
+              <div class="metric" role="cell">0.4492</div>
+            </div>
+            <div class="row" role="row">
+              <div class="model" role="cell">lexical</div>
+              <div class="metric" role="cell">0.1450</div>
+              <div class="metric" role="cell">0.3267</div>
+              <div class="metric" role="cell">0.4874</div>
+            </div>
+          </div>
+          <p class="leaderboard-note">Candidate set: <code>all_files</code>. Full task-level results are included in the release report.</p>
+          <div class="actions">
+            <a class="button secondary" href="https://huggingface.co/datasets/eyuansu71/agent_retrieval_bench/blob/main/reports/v1/model_leaderboard.md">Open full leaderboard</a>
           </div>
         </div>
       </div>
