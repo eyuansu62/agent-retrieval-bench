@@ -296,7 +296,7 @@ arb report-models \
   --json-out data/reports/v1/model_leaderboard.json
 ```
 
-数据在 Hugging Face：`eyuansu71/agent_retrieval_bench`。代码在 GitHub：`eyuansu62/agent-retrieval-bench`。
+项目主页：https://agent-retrieval-bench.github.io/。数据在 Hugging Face：`eyuansu71/agent_retrieval_bench`。代码在 GitHub：`eyuansu62/agent-retrieval-bench`。
 
 ## 下一步：V1.1
 

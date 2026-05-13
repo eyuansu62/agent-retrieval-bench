@@ -4,6 +4,8 @@ Agent Retrieval Bench is an action-oriented code retrieval benchmark for coding 
 
 The current public release is **Agent Retrieval Bench V1**: 225 manually curated samples across `code2test`, `comment2context`, and `trace2code`.
 
+Project page: https://agent-retrieval-bench.github.io/
+
 Raw crawling, weak-label generation, and audit workflows are intentionally not documented as the public path. Use this repository to run evaluations against the released benchmark artifacts on Hugging Face.
 
 ## Release Contents

@@ -16,6 +16,11 @@ embedding = [
     "sentence-transformers>=3.0.0",
 ]
 
+[project.urls]
+Homepage = "https://agent-retrieval-bench.github.io/"
+Repository = "https://github.com/eyuansu62/agent-retrieval-bench"
+Dataset = "https://huggingface.co/datasets/eyuansu71/agent_retrieval_bench"
+
 [project.scripts]
 arb = "agent_retrieval_bench.cli:main"
 

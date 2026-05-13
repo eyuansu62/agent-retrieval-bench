@@ -287,6 +287,7 @@ arb report-models \
   --json-out data/reports/v1/model_leaderboard.json
 ```
 
+Project page: https://agent-retrieval-bench.github.io/
 Dataset: `eyuansu71/agent_retrieval_bench` on Hugging Face.  
 Code: `eyuansu62/agent-retrieval-bench` on GitHub.
 
