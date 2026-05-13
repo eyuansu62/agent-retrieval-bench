@@ -3,574 +3,422 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="description" content="Agent Retrieval Bench V1 is a curated benchmark for agentic code retrieval across code2test, comment2context, and trace2code." />
+  <meta name="description" content="Agent Retrieval Bench V1 is a benchmark for evaluating whether coding-agent retrievers can find the files needed before writing patches." />
   <title>Agent Retrieval Bench V1</title>
   <style>
     :root {
       --bg: #07100d;
-      --bg-2: #0d1a16;
       --fg: #eef7f1;
       --muted: #a7b9b0;
-      --dim: #71847b;
+      --soft: #cad8d0;
       --line: rgba(204, 255, 232, 0.14);
-      --line-strong: rgba(204, 255, 232, 0.28);
-      --accent: #7cffc4;
-      --accent-2: #9ab7ff;
-      --warn: #ffd580;
-      --max: 1160px;
-      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-      --sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --accent: #72f0b6;
+      --accent-soft: rgba(114, 240, 182, 0.12);
+      --panel: rgba(238, 247, 241, 0.055);
+      --code: #0d1a16;
+      --max: 1120px;
     }
 
     * { box-sizing: border-box; }
     html { scroll-behavior: smooth; }
+
     body {
       margin: 0;
       color: var(--fg);
-      font-family: var(--sans);
       background:
-        radial-gradient(circle at 82% 8%, rgba(124, 255, 196, 0.15), transparent 32rem),
-        radial-gradient(circle at 18% 12%, rgba(154, 183, 255, 0.14), transparent 28rem),
-        linear-gradient(180deg, #07100d 0%, #08120f 45%, #050907 100%);
-      line-height: 1.55;
+        radial-gradient(circle at 18% 0%, rgba(114, 240, 182, 0.12), transparent 30%),
+        linear-gradient(180deg, #07100d 0%, #0a1512 46%, #07100d 100%);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.6;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(rgba(238, 247, 241, 0.045) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(238, 247, 241, 0.045) 1px, transparent 1px);
+      background-size: 96px 96px;
+      mask-image: linear-gradient(to bottom, black, transparent 78%);
     }
 
     a { color: inherit; text-decoration: none; }
-    .page { overflow: hidden; }
-    .nav {
-      position: fixed;
-      z-index: 20;
-      top: 0;
-      left: 0;
-      right: 0;
-      display: flex;
-      justify-content: center;
-      border-bottom: 1px solid rgba(255,255,255,0.06);
-      background: rgba(7, 16, 13, 0.68);
-      backdrop-filter: blur(18px);
+
+    .wrap {
+      width: min(var(--max), calc(100% - 44px));
+      margin: 0 auto;
+      position: relative;
     }
-    .nav-inner {
-      width: min(var(--max), calc(100vw - 32px));
-      height: 64px;
+
+    header {
+      padding: 28px 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    nav {
       display: flex;
-      align-items: center;
       justify-content: space-between;
+      align-items: center;
       gap: 24px;
     }
+
     .brand {
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+    }
+
+    .nav-links {
       display: flex;
       align-items: center;
-      gap: 10px;
-      font-weight: 760;
-      letter-spacing: -0.03em;
+      gap: 18px;
+      color: var(--muted);
+      font-size: 14px;
     }
-    .brand-mark {
-      width: 24px;
-      height: 24px;
-      border-radius: 50%;
-      background: radial-gradient(circle at 38% 34%, #fff 0 6%, var(--accent) 7% 40%, #0f3528 42% 100%);
-      box-shadow: 0 0 30px rgba(124,255,196,.4);
-    }
-    .nav-links { display: flex; align-items: center; gap: 18px; color: var(--muted); font-size: 14px; }
-    .nav-links a { transition: color .2s ease; }
+
     .nav-links a:hover { color: var(--fg); }
+
+    .hero {
+      min-height: 72svh;
+      display: grid;
+      align-items: center;
+      padding: 84px 0 72px;
+    }
+
+    .eyebrow {
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      margin-bottom: 22px;
+    }
+
+    h1 {
+      max-width: 1020px;
+      margin: 0;
+      font-size: clamp(46px, 7vw, 92px);
+      line-height: 0.97;
+      letter-spacing: -0.06em;
+      font-weight: 710;
+    }
+
+    .hero-copy {
+      max-width: 720px;
+      margin: 28px 0 0;
+      color: var(--soft);
+      font-size: clamp(18px, 2vw, 22px);
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 34px;
+    }
+
     .button {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      min-height: 42px;
+      min-height: 46px;
       padding: 0 18px;
-      border: 1px solid rgba(124,255,196,.42);
+      border: 1px solid rgba(114, 240, 182, 0.46);
       border-radius: 999px;
-      color: #06120e;
       background: var(--accent);
+      color: #06110d;
       font-weight: 720;
-      box-shadow: 0 16px 50px rgba(124,255,196,.18);
-      transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+      transition: transform 160ms ease, background 160ms ease, border-color 160ms ease;
     }
-    .button:hover { transform: translateY(-2px); box-shadow: 0 20px 70px rgba(124,255,196,.26); }
+
+    .button:hover { transform: translateY(-1px); background: #9df8cc; }
+
     .button.secondary {
-      color: var(--fg);
       background: transparent;
-      border-color: rgba(255,255,255,.18);
-      box-shadow: none;
-    }
-    .button.secondary:hover { border-color: rgba(124,255,196,.6); }
-
-    .hero {
-      min-height: 100svh;
-      position: relative;
-      display: grid;
-      align-items: center;
-      padding: 112px 0 64px;
-    }
-    .hero::before {
-      content: "";
-      position: absolute;
-      inset: 0;
-      pointer-events: none;
-      opacity: .7;
-      background-image:
-        linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px);
-      background-size: 72px 72px;
-      mask-image: radial-gradient(circle at 50% 35%, black 0 38%, transparent 72%);
-    }
-    .hero-inner {
-      position: relative;
-      width: min(var(--max), calc(100vw - 32px));
-      margin: 0 auto;
-      display: grid;
-      grid-template-columns: minmax(0, 1.02fr) minmax(360px, .98fr);
-      gap: 56px;
-      align-items: center;
-    }
-    .eyebrow {
-      color: var(--accent);
-      font-family: var(--mono);
-      text-transform: uppercase;
-      letter-spacing: .1em;
-      font-size: 12px;
-      margin-bottom: 24px;
-    }
-    h1 {
-      margin: 0;
-      font-weight: 680;
-      font-size: clamp(44px, 6.3vw, 86px);
-      line-height: .98;
-      letter-spacing: -.055em;
-      max-width: 880px;
-      text-wrap: balance;
-    }
-    .hero-copy {
-      margin: 30px 0 0;
-      max-width: 680px;
-      font-size: clamp(17px, 1.55vw, 21px);
-      color: var(--muted);
-    }
-    .hero-actions { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 34px; }
-    .hero-stats {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0,1fr));
-      gap: 18px;
-      margin-top: 54px;
-      max-width: 720px;
-    }
-    .stat { border-top: 1px solid var(--line-strong); padding-top: 16px; }
-    .stat strong { display: block; font-size: 34px; line-height: 1; letter-spacing: -.04em; }
-    .stat span { display: block; color: var(--muted); margin-top: 8px; font-size: 14px; }
-
-    .orbital {
-      position: relative;
-      min-height: 560px;
-      transform: translateZ(0);
-    }
-    .orbit-panel {
-      position: absolute;
-      inset: 16px;
-      border: 1px solid rgba(255,255,255,.1);
-      border-radius: 34px;
-      background: linear-gradient(145deg, rgba(255,255,255,.08), rgba(255,255,255,.025));
-      box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 40px 140px rgba(0,0,0,.42);
-      overflow: hidden;
-    }
-    .orbit-panel::before {
-      content: "";
-      position: absolute;
-      inset: -15%;
-      background:
-        radial-gradient(circle at 50% 50%, rgba(124,255,196,.14), transparent 20%),
-        conic-gradient(from 150deg, transparent, rgba(124,255,196,.2), transparent, rgba(154,183,255,.18), transparent);
-      animation: spin 18s linear infinite;
-    }
-    .orbit-panel::after {
-      content: "";
-      position: absolute;
-      inset: 1px;
-      border-radius: 33px;
-      background: rgba(8, 18, 15, .86);
-    }
-    .graph {
-      position: absolute;
-      inset: 0;
-      z-index: 2;
-    }
-    .node {
-      position: absolute;
-      padding: 10px 12px;
-      border: 1px solid rgba(255,255,255,.12);
-      border-radius: 999px;
-      background: rgba(9, 23, 18, .92);
-      color: var(--muted);
-      font: 12px/1 var(--mono);
-      box-shadow: 0 14px 40px rgba(0,0,0,.28);
-      animation: float 5.5s ease-in-out infinite;
-    }
-    .node.hot { color: #06120e; background: var(--accent); border-color: transparent; }
-    .node:nth-child(2n) { animation-delay: -1.4s; }
-    .node:nth-child(3n) { animation-delay: -2.7s; }
-    .node.a { left: 8%; top: 16%; }
-    .node.b { left: 48%; top: 8%; }
-    .node.c { right: 8%; top: 24%; }
-    .node.d { left: 14%; bottom: 22%; }
-    .node.e { right: 12%; bottom: 18%; }
-    .node.f { left: 40%; bottom: 42%; }
-    .graph svg { position: absolute; inset: 0; width: 100%; height: 100%; opacity: .75; }
-    .graph path { stroke: rgba(124,255,196,.34); stroke-width: 1.2; fill: none; stroke-dasharray: 8 10; animation: dash 16s linear infinite; }
-    .graph path.blue { stroke: rgba(154,183,255,.32); animation-duration: 22s; }
-    .terminal {
-      position: absolute;
-      z-index: 3;
-      left: 8%;
-      right: 8%;
-      bottom: 10%;
-      border: 1px solid rgba(255,255,255,.12);
-      border-radius: 18px;
-      background: rgba(2, 8, 6, .78);
-      overflow: hidden;
-      box-shadow: 0 30px 90px rgba(0,0,0,.42);
-    }
-    .terminal-bar { height: 34px; display: flex; align-items: center; gap: 7px; padding: 0 13px; border-bottom: 1px solid rgba(255,255,255,.08); }
-    .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); opacity: .75; }
-    pre { margin: 0; padding: 18px; overflow: auto; color: #d8f8e8; font: 13px/1.7 var(--mono); }
-    code { font-family: var(--mono); }
-    .accent { color: var(--accent); }
-    .muted { color: var(--muted); }
-
-    section { padding: 108px 0; }
-    .wrap { width: min(var(--max), calc(100vw - 32px)); margin: 0 auto; }
-    .section-head { max-width: 820px; margin-bottom: 54px; }
-    .section-kicker { color: var(--accent); font: 12px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; margin-bottom: 18px; }
-    h2 { margin: 0; font-weight: 680; font-size: clamp(36px, 4.4vw, 64px); line-height: 1.02; letter-spacing: -.045em; text-wrap: balance; }
-    .lead { margin: 20px 0 0; color: var(--muted); font-size: 19px; max-width: 760px; }
-
-    .task-grid {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 28px;
-    }
-    .task {
-      padding: 0 0 28px;
-      border-bottom: 1px solid var(--line-strong);
-      transition: transform .2s ease, border-color .2s ease;
-    }
-    .task:hover { transform: translateY(-5px); border-color: rgba(124,255,196,.55); }
-    .task-num { font: 13px var(--mono); color: var(--accent); margin-bottom: 24px; }
-    .task h3 { margin: 0 0 14px; font-size: 28px; letter-spacing: -.04em; }
-    .task p { color: var(--muted); margin: 0; }
-    .task .metric { margin-top: 26px; display: flex; gap: 14px; align-items: baseline; }
-    .task .metric strong { font-size: 46px; line-height: 1; letter-spacing: -.05em; }
-    .task .metric span { color: var(--dim); font-size: 13px; }
-
-    .examples { display: grid; gap: 28px; }
-    .example {
-      display: grid;
-      grid-template-columns: 280px minmax(0,1fr);
-      gap: 28px;
-      padding: 30px 0;
-      border-top: 1px solid var(--line);
-    }
-    .example:last-child { border-bottom: 1px solid var(--line); }
-    .example h3 { margin: 0; font-size: 24px; letter-spacing: -.03em; }
-    .example p { margin: 0 0 16px; color: var(--muted); }
-    .example .signal {
       color: var(--fg);
-      font-family: var(--mono);
-      border-left: 2px solid var(--accent);
-      padding-left: 14px;
-      margin-bottom: 16px;
+      border-color: var(--line);
     }
 
-    .leaderboard {
-      border-top: 1px solid var(--line-strong);
-    }
-    table { width: 100%; border-collapse: collapse; font-size: 15px; }
-    th, td { padding: 17px 12px; text-align: right; border-bottom: 1px solid var(--line); }
-    th:first-child, td:first-child { text-align: left; padding-left: 0; }
-    th { color: var(--dim); font: 12px var(--mono); text-transform: uppercase; letter-spacing: .08em; }
-    td { color: var(--muted); }
-    td.model { color: var(--fg); font-weight: 700; }
-    .best { color: var(--accent); }
+    .button.secondary:hover { border-color: rgba(114, 240, 182, 0.58); background: var(--accent-soft); }
 
-    .findings {
+    main section {
+      border-top: 1px solid var(--line);
+      padding: 74px 0;
+    }
+
+    .section-kicker {
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      margin-bottom: 18px;
+    }
+
+    h2 {
+      margin: 0;
+      max-width: 840px;
+      font-size: clamp(32px, 4.5vw, 58px);
+      line-height: 1.04;
+      letter-spacing: -0.045em;
+      font-weight: 700;
+    }
+
+    .section-copy {
+      max-width: 760px;
+      margin: 20px 0 0;
+      color: var(--soft);
+      font-size: 18px;
+    }
+
+    .blog-panel {
       display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 32px;
+      grid-template-columns: minmax(0, 1fr) 320px;
+      gap: 48px;
+      align-items: end;
+    }
+
+    .blog-points {
+      margin: 30px 0 0;
+      padding: 0;
+      list-style: none;
+      display: grid;
+      gap: 12px;
+      color: var(--soft);
+      font-size: 17px;
+    }
+
+    .blog-points li {
+      padding-left: 22px;
+      position: relative;
+    }
+
+    .blog-points li::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0.74em;
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: var(--accent);
+    }
+
+    .fact-list {
+      border-left: 1px solid var(--line);
+      padding-left: 24px;
+      color: var(--muted);
+    }
+
+    .fact {
+      padding: 16px 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .fact:last-child { border-bottom: 0; }
+
+    .fact strong {
+      display: block;
+      color: var(--fg);
+      font-size: 30px;
+      letter-spacing: -0.04em;
+      line-height: 1;
+      margin-bottom: 7px;
+    }
+
+    .split {
+      display: grid;
+      grid-template-columns: 0.72fr 1fr;
+      gap: 54px;
       align-items: start;
     }
-    .finding-list { display: grid; gap: 22px; }
-    .finding { border-left: 1px solid var(--line-strong); padding-left: 20px; }
-    .finding h3 { margin: 0 0 8px; font-size: 22px; letter-spacing: -.03em; }
-    .finding p { margin: 0; color: var(--muted); }
-    .quote {
-      padding: 34px;
-      border: 1px solid rgba(255,255,255,.12);
-      border-radius: 28px;
-      background: linear-gradient(145deg, rgba(124,255,196,.1), rgba(154,183,255,.05));
-      font-size: 24px;
-      line-height: 1.28;
-      letter-spacing: -.035em;
-    }
 
-    .quickstart {
+    .tasks {
       display: grid;
-      grid-template-columns: minmax(0, .88fr) minmax(0, 1.12fr);
-      gap: 40px;
-      align-items: center;
-      border-top: 1px solid var(--line-strong);
-      border-bottom: 1px solid var(--line-strong);
-      padding: 54px 0;
+      gap: 1px;
+      background: var(--line);
+      border: 1px solid var(--line);
     }
-    .quickstart h2 { font-size: clamp(36px, 4vw, 58px); }
-    .footer {
-      padding: 52px 0;
-      color: var(--dim);
-      border-top: 1px solid rgba(255,255,255,.07);
+
+    .task {
+      display: grid;
+      grid-template-columns: 130px 1fr;
+      gap: 24px;
+      padding: 22px;
+      background: rgba(7, 16, 13, 0.86);
     }
-    .footer-inner { width: min(var(--max), calc(100vw - 32px)); margin: 0 auto; display: flex; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
 
-    .reveal { opacity: 0; transform: translateY(24px); transition: opacity .7s ease, transform .7s ease; }
-    .reveal.in { opacity: 1; transform: translateY(0); }
-
-    @keyframes spin { to { transform: rotate(1turn); } }
-    @keyframes dash { to { stroke-dashoffset: -260; } }
-    @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
-
-    @media (max-width: 900px) {
-      .nav-links { display: none; }
-      .hero-inner, .findings, .quickstart { grid-template-columns: 1fr; }
-      .orbital { min-height: 480px; }
-      .task-grid { grid-template-columns: 1fr; }
-      .example { grid-template-columns: 1fr; }
-      .hero-stats { grid-template-columns: 1fr 1fr; }
-      table { font-size: 13px; }
-      th, td { padding: 13px 8px; }
+    .task code {
+      color: var(--accent);
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      font-size: 14px;
     }
-    @media (max-width: 560px) {
-      .hero-stats { grid-template-columns: 1fr; }
-      .hero { padding-top: 96px; }
-      section { padding: 78px 0; }
-      .orbital { min-height: 410px; }
-      .node { font-size: 10px; padding: 8px 9px; }
-      .terminal { left: 4%; right: 4%; }
-      pre { font-size: 11px; }
+
+    .task p {
+      margin: 0;
+      color: var(--soft);
+    }
+
+    pre {
+      margin: 26px 0 0;
+      overflow-x: auto;
+      padding: 20px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--code);
+      color: #e6fff2;
+      font-size: 14px;
+      line-height: 1.58;
+    }
+
+    footer {
+      border-top: 1px solid var(--line);
+      padding: 30px 0 42px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    footer .wrap {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+
+    footer a { color: var(--soft); }
+    footer a:hover { color: var(--accent); }
+
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(14px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .hero .wrap > *, main section > .wrap {
+      animation: rise 520ms ease both;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 1ms !important;
+        scroll-behavior: auto !important;
+        transition-duration: 1ms !important;
+      }
+    }
+
+    @media (max-width: 860px) {
+      header { padding: 22px 0; }
+      nav { align-items: flex-start; flex-direction: column; }
+      .nav-links { gap: 14px; flex-wrap: wrap; }
+      .hero { min-height: auto; padding: 68px 0 64px; }
+      .blog-panel, .split { grid-template-columns: 1fr; }
+      .fact-list { border-left: 0; padding-left: 0; }
+      .task { grid-template-columns: 1fr; gap: 8px; }
     }
   </style>
 </head>
 <body>
-  <div class="page">
-    <nav class="nav" aria-label="Primary navigation">
-      <div class="nav-inner">
-        <a class="brand" href="#top"><span class="brand-mark" aria-hidden="true"></span><span>Agent Retrieval Bench</span></a>
+  <header>
+    <div class="wrap">
+      <nav aria-label="Primary">
+        <a class="brand" href="./">Agent Retrieval Bench</a>
         <div class="nav-links">
-          <a href="#tasks">Tasks</a>
-          <a href="#examples">Examples</a>
-          <a href="#leaderboard">Leaderboard</a>
-          <a href="#quickstart">Quickstart</a>
+          <a href="blog.html">Blog</a>
           <a href="https://huggingface.co/datasets/eyuansu71/agent_retrieval_bench">Dataset</a>
+          <a href="https://github.com/eyuansu62/agent-retrieval-bench">GitHub</a>
         </div>
+      </nav>
+    </div>
+  </header>
+
+  <div class="hero">
+    <div class="wrap">
+      <div class="eyebrow">Agentic Code Retrieval Benchmark · V1</div>
+      <h1>Find the files before writing the patch.</h1>
+      <p class="hero-copy">A curated benchmark for testing whether retrievers can locate the repository context a coding agent needs before it edits code.</p>
+      <div class="actions">
+        <a class="button" href="blog.html">Read the technical blog</a>
+        <a class="button secondary" href="#quickstart">Download V1</a>
       </div>
-    </nav>
-
-    <header id="top" class="hero">
-      <div class="hero-inner">
-        <div class="reveal">
-          <div class="eyebrow">Agentic code retrieval benchmark · V1</div>
-          <h1>Find the files before writing the patch.</h1>
-          <p class="hero-copy">A curated benchmark for measuring whether coding-agent retrievers can locate the repository files required for code review, test retrieval, and failure-trace debugging.</p>
-          <div class="hero-actions">
-            <a class="button" href="https://huggingface.co/datasets/eyuansu71/agent_retrieval_bench">Download dataset</a>
-            <a class="button secondary" href="https://github.com/eyuansu62/agent-retrieval-bench">View evaluator</a>
-          </div>
-          <div class="hero-stats" aria-label="V1 statistics">
-            <div class="stat"><strong>225</strong><span>manually curated samples</span></div>
-            <div class="stat"><strong>3</strong><span>agentic retrieval tasks</span></div>
-            <div class="stat"><strong>164</strong><span>base-commit corpora</span></div>
-          </div>
-        </div>
-        <div class="orbital reveal" aria-hidden="true">
-          <div class="orbit-panel"></div>
-          <div class="graph">
-            <svg viewBox="0 0 640 560" preserveAspectRatio="none">
-              <path d="M88 92 C210 130 250 230 340 250 C440 280 500 180 568 146" />
-              <path class="blue" d="M120 420 C210 340 260 322 360 330 C464 338 486 430 545 455" />
-              <path d="M318 90 C300 180 330 240 304 312 C278 390 210 420 126 440" />
-              <path class="blue" d="M528 150 C450 220 426 286 342 316 C280 340 218 318 112 110" />
-            </svg>
-            <div class="node a hot">review comment</div>
-            <div class="node b">given file</div>
-            <div class="node c hot">context gold</div>
-            <div class="node d">test failure</div>
-            <div class="node e hot">root cause</div>
-            <div class="node f">source ↔ test</div>
-          </div>
-          <div class="terminal">
-            <div class="terminal-bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
-            <pre><code><span class="muted">$</span> arb download-benchmark --version v1 --local-dir data
-<span class="accent">✓</span> checksum verified
-<span class="accent">✓</span> extracted benchmark/v1, corpus/v1
-<span class="muted">$</span> arb eval-repomap --derived data/benchmark/v1 --corpus data/corpus/v1</code></pre>
-          </div>
-        </div>
-      </div>
-    </header>
-
-    <main>
-      <section id="motivation">
-        <div class="wrap">
-          <div class="section-head reveal">
-            <div class="section-kicker">Motivation</div>
-            <h2>Patch generation is only the last mile.</h2>
-            <p class="lead">In real repositories, coding agents first need to locate the right context: implementation files, tests, review constraints, and root-cause source files. End-to-end agent scores often hide whether failures come from bad generation or bad retrieval.</p>
-          </div>
-          <div class="findings reveal">
-            <div class="quote">Agentic retrieval asks for the files an agent must read to finish the task, not merely the code most semantically similar to a query.</div>
-            <div class="finding-list">
-              <div class="finding"><h3>Indirect signals</h3><p>PRs, comments, and traces rarely name all target files directly. The useful context is often one relation away.</p></div>
-              <div class="finding"><h3>Graph structure matters</h3><p>Source/test links, package boundaries, symbol references, and failure paths carry signals that pure embedding similarity can miss.</p></div>
-              <div class="finding"><h3>Leakage is easy</h3><p>Gold paths, basenames, raw patches, and final diffs can turn hard retrieval into trivial path matching. V1 filters these signals aggressively.</p></div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section id="tasks">
-        <div class="wrap">
-          <div class="section-head reveal">
-            <div class="section-kicker">Benchmark Tasks</div>
-            <h2>Three retrieval surfaces from real coding workflows.</h2>
-            <p class="lead">Each sample is evaluated against the repository at its base commit. Fixed code is not indexed.</p>
-          </div>
-          <div class="task-grid">
-            <article class="task reveal">
-              <div class="task-num">01 · code2test</div>
-              <h3>Implementation intent → related tests</h3>
-              <p>Given a PR intent or implementation-change signal, retrieve the tests that should cover the behavior.</p>
-              <div class="metric"><strong>106</strong><span>samples</span></div>
-            </article>
-            <article class="task reveal">
-              <div class="task-num">02 · comment2context</div>
-              <h3>Review comment → extra context</h3>
-              <p>The commented file is given. The retriever must find additional files needed to act on the review.</p>
-              <div class="metric"><strong>51</strong><span>samples</span></div>
-            </article>
-            <article class="task reveal">
-              <div class="task-num">03 · trace2code</div>
-              <h3>Failure trace → root-cause source</h3>
-              <p>Given a reproduced failure excerpt, retrieve audited source files that caused the failure.</p>
-              <div class="metric"><strong>68</strong><span>samples</span></div>
-            </article>
-          </div>
-        </div>
-      </section>
-
-      <section id="examples">
-        <div class="wrap">
-          <div class="section-head reveal">
-            <div class="section-kicker">Representative Examples</div>
-            <h2>The query is often indirect.</h2>
-            <p class="lead">These are simplified patterns observed during V1 construction. They show why agentic retrieval is not just semantic code search.</p>
-          </div>
-          <div class="examples">
-            <div class="example reveal">
-              <h3>PR intent does not name tests</h3>
-              <div>
-                <p class="signal">“Add support for optional values in shell completion.”</p>
-                <p>A semantic retriever may return completion implementation files. The agent may actually need shell-specific completion tests and snapshots. This requires source→test mapping, not just text similarity.</p>
-              </div>
-            </div>
-            <div class="example reveal">
-              <h3>The reviewed file is not enough</h3>
-              <div>
-                <p class="signal">“Should this be sanitized consistently with the web response path?”</p>
-                <p>The commented file is already known. The useful context may live in a web extension, existing endpoint tests, or a policy module. V1 scores the extra context, not the given file.</p>
-              </div>
-            </div>
-            <div class="example reveal">
-              <h3>Failure traces point at symptoms</h3>
-              <div>
-                <p class="signal">FAIL: TestOptionalCompletion · expected candidates, got different output</p>
-                <p>The trace may mention only a test file. The root cause can be in parser, runtime, or completion source code. V1 evaluates retrieval of source root causes, not trace-frame lookup.</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section id="leaderboard">
-        <div class="wrap">
-          <div class="section-head reveal">
-            <div class="section-kicker">V1 Leaderboard</div>
-            <h2>Different retrieval biases win different tasks.</h2>
-            <p class="lead">Primary ranking metric: overall MRR. Candidate set: all files. All listed runs evaluate 225 samples with no skipped items.</p>
-          </div>
-          <div class="leaderboard reveal">
-            <table aria-label="Overall leaderboard">
-              <thead><tr><th>Model</th><th>R@5</th><th>R@10</th><th>R@20</th><th>MRR</th><th>Gold@8k</th></tr></thead>
-              <tbody>
-                <tr><td class="model">Qwen3-Embedding-4B</td><td>0.2883</td><td>0.4033</td><td>0.5828</td><td class="best">0.2455</td><td>0.2542</td></tr>
-                <tr><td class="model">aider-style-repomap</td><td class="best">0.3089</td><td class="best">0.4705</td><td class="best">0.6299</td><td>0.2227</td><td>0.0704</td></tr>
-                <tr><td class="model">jina-code-embeddings-0.5b</td><td>0.2230</td><td>0.3133</td><td>0.4492</td><td>0.1883</td><td>0.1556</td></tr>
-                <tr><td class="model">lexical</td><td>0.1970</td><td>0.3267</td><td>0.4874</td><td>0.1450</td><td>0.0785</td></tr>
-              </tbody>
-            </table>
-          </div>
-          <div class="findings" style="margin-top: 52px;">
-            <div class="finding-list reveal">
-              <div class="finding"><h3>Qwen wins code2test</h3><p>Qwen3-Embedding-4B reaches 0.3225 MRR and 0.7230 Recall@20 on implementation-to-test retrieval.</p></div>
-              <div class="finding"><h3>Jina wins comment2context</h3><p>Jina reaches 0.3282 MRR on review-context retrieval, narrowly ahead of Qwen by MRR.</p></div>
-              <div class="finding"><h3>RepoMap wins trace2code</h3><p>Vectorless RepoMap reaches 0.2750 MRR and 0.8064 Recall@20 on failure-trace root-cause retrieval.</p></div>
-            </div>
-            <div class="quote reveal">The trace task rewards structured failure-log and repo-graph retrieval. Weak embedding scores there are a benchmark signal, not a data bug.</div>
-          </div>
-        </div>
-      </section>
-
-      <section id="quickstart">
-        <div class="wrap">
-          <div class="quickstart reveal">
-            <div>
-              <div class="section-kicker">Quickstart</div>
-              <h2>One command to get V1.</h2>
-              <p class="lead">The release bundle includes benchmark files, corpus chunks, eval summaries, and reports. The downloader handles checksum verification and extraction.</p>
-              <div class="hero-actions">
-                <a class="button" href="https://huggingface.co/datasets/eyuansu71/agent_retrieval_bench">Hugging Face dataset</a>
-                <a class="button secondary" href="blog.html">Read technical blog</a>
-              </div>
-            </div>
-            <div class="terminal" style="position: relative; inset: auto; left: auto; right: auto; bottom: auto;">
-              <div class="terminal-bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
-              <pre><code><span class="muted">$</span> pip install "git+https://github.com/eyuansu62/agent-retrieval-bench.git"
-<span class="muted">$</span> arb download-benchmark --version v1 --local-dir data --force
-<span class="muted">$</span> arb validate data/benchmark/v1/*.jsonl
-<span class="muted">$</span> arb report-models --eval-dir data/eval/v1</code></pre>
-            </div>
-          </div>
-        </div>
-      </section>
-    </main>
-
-    <footer class="footer">
-      <div class="footer-inner">
-        <div>Agent Retrieval Bench V1 · benchmark/v1 is frozen</div>
-        <div><a href="https://github.com/eyuansu62/agent-retrieval-bench">GitHub</a> · <a href="https://huggingface.co/datasets/eyuansu71/agent_retrieval_bench">Hugging Face</a> · <a href="v1_analysis.md">Analysis</a></div>
-      </div>
-    </footer>
+    </div>
   </div>
 
-  <script>
-    const observer = new IntersectionObserver((entries) => {
-      for (const entry of entries) {
-        if (entry.isIntersecting) {
-          entry.target.classList.add('in');
-          observer.unobserve(entry.target);
-        }
-      }
-    }, { threshold: 0.12 });
-    document.querySelectorAll('.reveal').forEach((el, index) => {
-      el.style.transitionDelay = `${Math.min(index * 45, 220)}ms`;
-      observer.observe(el);
-    });
-  </script>
+  <main>
+    <section id="blog">
+      <div class="wrap blog-panel">
+        <div>
+          <div class="section-kicker">Start here</div>
+          <h2>The blog explains why agent retrieval is not ordinary code search.</h2>
+          <p class="section-copy">The benchmark is motivated by a simple failure mode: a coding agent can generate a plausible patch and still fail because it never opened the right files.</p>
+          <ul class="blog-points">
+            <li>Why patch-generation benchmarks hide retrieval failures.</li>
+            <li>How V1 defines `code2test`, `comment2context`, and `trace2code`.</li>
+            <li>Why RepoMap-style structure helps on failure-trace retrieval.</li>
+          </ul>
+          <div class="actions">
+            <a class="button" href="blog.html">Open blog</a>
+          </div>
+        </div>
+        <div class="fact-list" aria-label="V1 facts">
+          <div class="fact"><strong>225</strong>manually curated samples</div>
+          <div class="fact"><strong>3</strong>agentic retrieval tasks</div>
+          <div class="fact"><strong>4</strong>baseline families reported</div>
+        </div>
+      </div>
+    </section>
+
+    <section id="tasks">
+      <div class="wrap split">
+        <div>
+          <div class="section-kicker">What V1 measures</div>
+          <h2>Three ways agents lose context.</h2>
+          <p class="section-copy">Each sample asks for files the agent must read, not merely files whose text looks similar to the query.</p>
+        </div>
+        <div class="tasks">
+          <div class="task">
+            <code>code2test</code>
+            <p>Given implementation intent, retrieve the tests that should validate the change.</p>
+          </div>
+          <div class="task">
+            <code>comment2context</code>
+            <p>Given a review comment and its local file, retrieve the extra context needed to act correctly.</p>
+          </div>
+          <div class="task">
+            <code>trace2code</code>
+            <p>Given a reproduced failure trace, retrieve audited root-cause source files.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="quickstart">
+      <div class="wrap split">
+        <div>
+          <div class="section-kicker">Reproduce</div>
+          <h2>One command gets the release bundle.</h2>
+          <p class="section-copy">The downloader fetches V1 from Hugging Face, verifies the checksum, and extracts benchmark, corpus, eval, and report files.</p>
+        </div>
+        <div>
+          <pre><code>pip install "git+https://github.com/eyuansu62/agent-retrieval-bench.git"
+arb download-benchmark --version v1 --local-dir data --force
+arb validate data/benchmark/v1/*.jsonl</code></pre>
+          <div class="actions">
+            <a class="button secondary" href="https://huggingface.co/datasets/eyuansu71/agent_retrieval_bench">Hugging Face dataset</a>
+            <a class="button secondary" href="https://github.com/eyuansu62/agent-retrieval-bench">Evaluator source</a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <div>Agent Retrieval Bench V1</div>
+      <div><a href="blog.html">Blog</a> · <a href="v1_analysis.md">Analysis notes</a> · <a href="https://huggingface.co/datasets/eyuansu71/agent_retrieval_bench">Dataset</a></div>
+    </div>
+  </footer>
 </body>
 </html>
