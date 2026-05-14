@@ -83,6 +83,7 @@ class VoyageAPIEmbedder:
         timeout_seconds: float = 60.0,
         max_retries: int = 5,
         retry_base_seconds: float = 1.0,
+        min_request_interval_seconds: float = 0.0,
         request_func: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
     ) -> None:
         self.model_name = model_name
@@ -95,7 +96,9 @@ class VoyageAPIEmbedder:
         self.timeout_seconds = timeout_seconds
         self.max_retries = max(0, max_retries)
         self.retry_base_seconds = max(0.0, retry_base_seconds)
+        self.min_request_interval_seconds = max(0.0, min_request_interval_seconds)
         self.request_func = request_func
+        self._last_request_at = 0.0
         if self.request_func is None and not self.api_key:
             raise RuntimeError("Voyage evaluation requires VOYAGE_API_KEY or --api-key.")
 
@@ -136,27 +139,49 @@ class VoyageAPIEmbedder:
             "output_dtype": self.output_dtype,
             "truncation": self.truncation,
             "normalize_embeddings": self.normalize_embeddings,
+            "min_request_interval_seconds": self.min_request_interval_seconds,
         }
 
     def _request_embeddings(self, payload: dict[str, Any]) -> dict[str, Any]:
+        self._throttle()
         if self.request_func is not None:
-            return self.request_func(payload)
+            try:
+                return self.request_func(payload)
+            finally:
+                self._last_request_at = time.monotonic()
         last_error: Exception | None = None
         for attempt in range(self.max_retries + 1):
             try:
-                return self._post_json(payload)
+                response = self._post_json(payload)
+                self._last_request_at = time.monotonic()
+                return response
             except urllib.error.HTTPError as exc:
+                self._last_request_at = time.monotonic()
                 last_error = exc
+                retry_after = parse_retry_after(exc.headers.get("Retry-After"))
                 if exc.code not in {408, 409, 425, 429, 500, 502, 503, 504} or attempt >= self.max_retries:
                     message = exc.read().decode("utf-8", errors="replace")
                     raise RuntimeError(f"Voyage embedding request failed with HTTP {exc.code}: {message}") from exc
             except urllib.error.URLError as exc:
+                self._last_request_at = time.monotonic()
                 last_error = exc
+                retry_after = None
                 if attempt >= self.max_retries:
                     raise RuntimeError(f"Voyage embedding request failed: {exc}") from exc
-            if self.retry_base_seconds:
-                time.sleep(self.retry_base_seconds * (2**attempt))
+            sleep_seconds = retry_after
+            if sleep_seconds is None and self.retry_base_seconds:
+                sleep_seconds = self.retry_base_seconds * (2**attempt)
+            if sleep_seconds:
+                time.sleep(sleep_seconds)
         raise RuntimeError(f"Voyage embedding request failed: {last_error}")
+
+    def _throttle(self) -> None:
+        if not self.min_request_interval_seconds or not self._last_request_at:
+            return
+        elapsed = time.monotonic() - self._last_request_at
+        remaining = self.min_request_interval_seconds - elapsed
+        if remaining > 0:
+            time.sleep(remaining)
 
     def _post_json(self, payload: dict[str, Any]) -> dict[str, Any]:
         body = json.dumps(payload).encode("utf-8")
@@ -469,6 +494,15 @@ def normalize_vector(vector: Sequence[float]) -> list[float]:
     if norm == 0.0:
         return [float(value) for value in vector]
     return [float(value) / norm for value in vector]
+
+
+def parse_retry_after(value: str | None) -> float | None:
+    if not value:
+        return None
+    try:
+        return max(0.0, float(value))
+    except ValueError:
+        return None
 
 
 def embedding_cache_metadata(embedder: TextEmbedder, input_type: str | None = None) -> dict[str, Any]:

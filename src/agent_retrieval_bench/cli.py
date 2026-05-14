@@ -348,6 +348,12 @@ def main(argv: list[str] | None = None) -> int:
     voyage.add_argument("--no-normalize", action="store_true", help="Disable local L2 normalization.")
     voyage.add_argument("--timeout-seconds", type=float, default=60.0)
     voyage.add_argument("--max-retries", type=int, default=5)
+    voyage.add_argument(
+        "--min-request-interval-seconds",
+        type=float,
+        default=0.0,
+        help="Sleep between Voyage requests. Use about 21 seconds for unpaid 3 RPM accounts.",
+    )
     voyage.add_argument("--no-progress", action="store_true", help="Disable embedding evaluation progress output.")
 
     diagnose = subparsers.add_parser("diagnose", help="Diagnose benchmark difficulty and baseline quality.")
@@ -772,6 +778,7 @@ def main(argv: list[str] | None = None) -> int:
             normalize_embeddings=not args.no_normalize,
             timeout_seconds=args.timeout_seconds,
             max_retries=args.max_retries,
+            min_request_interval_seconds=args.min_request_interval_seconds,
         )
         result = evaluate_embedding_baseline(
             sample_paths=sample_paths,

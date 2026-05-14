@@ -12,6 +12,7 @@ from agent_retrieval_bench.embedding_eval import (
     evaluate_embedding_baseline,
     load_or_encode_chunk_vectors,
     model_slug,
+    parse_retry_after,
     rank_chunks_by_vectors,
 )
 
@@ -271,6 +272,12 @@ class EmbeddingEvalTests(unittest.TestCase):
         self.assertEqual([request["input_type"] for request in requests], ["document", "document"])
         self.assertEqual(requests[0]["model"], "voyage-code-3")
         self.assertEqual(requests[0]["output_dimension"], 512)
+
+    def test_parse_retry_after_header(self):
+        self.assertEqual(parse_retry_after("2.5"), 2.5)
+        self.assertEqual(parse_retry_after("-1"), 0.0)
+        self.assertIsNone(parse_retry_after("soon"))
+        self.assertIsNone(parse_retry_after(None))
 
     def test_embedding_cache_is_keyed_by_passage_options(self):
         try:
