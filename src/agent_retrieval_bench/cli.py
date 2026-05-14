@@ -15,6 +15,7 @@ from .crawler import crawl_commit_details_for_raw, crawl_pr_checks, crawl_repo, 
 from .derive import derive_repo
 from .diagnostics import diagnose_benchmark
 from .embedding_eval import (
+    VoyageAPIEmbedder,
     default_embedding_cache_dir,
     default_embedding_summary_path,
     evaluate_embedding_baseline,
@@ -314,6 +315,40 @@ def main(argv: list[str] | None = None) -> int:
     embedding.add_argument("--no-normalize", action="store_true", help="Disable embedding normalization.")
     embedding.add_argument("--no-progress", action="store_true", help="Disable embedding evaluation progress output.")
     embedding.add_argument("--trust-remote-code", action="store_true")
+
+    voyage = subparsers.add_parser("eval-voyage", help="Run a Voyage API embedding retrieval baseline.")
+    voyage.add_argument(
+        "samples",
+        nargs="*",
+        type=Path,
+        help="Benchmark sample JSONL files. Defaults to --derived/*.jsonl.",
+    )
+    voyage.add_argument("--derived", type=Path, default=Path("data/benchmark/v1"))
+    voyage.add_argument("--corpus", type=Path, default=Path("data/corpus/v1"))
+    voyage.add_argument("--model", default="voyage-code-3")
+    voyage.add_argument("--out", type=Path)
+    voyage.add_argument("--details", type=Path)
+    voyage.add_argument("--cache", type=Path)
+    voyage.add_argument("--keep-list", type=Path, default=Path("data/reports/v1/keep_samples.jsonl"))
+    voyage.add_argument("--no-keep-list", action="store_true")
+    voyage.add_argument("--limit-samples", type=int)
+    voyage.add_argument("--candidate-filter", choices=CANDIDATE_FILTERS, default="all_files")
+    voyage.add_argument("--batch-size", type=int, default=32)
+    voyage.add_argument("--api-key", help="Voyage API key. Defaults to VOYAGE_API_KEY.")
+    voyage.add_argument("--api-base", default="https://api.voyageai.com/v1")
+    voyage.add_argument("--query-input-type", default="query")
+    voyage.add_argument("--passage-input-type", default="document")
+    voyage.add_argument("--output-dimension", type=int, choices=[256, 512, 1024, 2048])
+    voyage.add_argument(
+        "--output-dtype",
+        default="float",
+        choices=["float", "int8", "uint8"],
+    )
+    voyage.add_argument("--no-truncation", action="store_true")
+    voyage.add_argument("--no-normalize", action="store_true", help="Disable local L2 normalization.")
+    voyage.add_argument("--timeout-seconds", type=float, default=60.0)
+    voyage.add_argument("--max-retries", type=int, default=5)
+    voyage.add_argument("--no-progress", action="store_true", help="Disable embedding evaluation progress output.")
 
     diagnose = subparsers.add_parser("diagnose", help="Diagnose benchmark difficulty and baseline quality.")
     diagnose.add_argument("--samples", type=Path, default=Path("data/benchmark/v0_1/samples.jsonl"))
@@ -714,6 +749,44 @@ def main(argv: list[str] | None = None) -> int:
             passage_prefix=args.passage_prefix,
             normalize_embeddings=not args.no_normalize,
             trust_remote_code=args.trust_remote_code,
+            progress=not args.no_progress,
+            candidate_filter=args.candidate_filter,
+        )
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return 0
+    if args.command == "eval-voyage":
+        sample_paths = args.samples or sample_paths_from_derived(args.derived)
+        keep_list = None if args.no_keep_list else args.keep_list
+        out_path = args.out or default_embedding_summary_path(
+            args.model,
+            root=Path("data/eval/v1"),
+            candidate_filter=args.candidate_filter,
+        )
+        embedder = VoyageAPIEmbedder(
+            model_name=args.model,
+            api_key=args.api_key,
+            api_base=args.api_base,
+            output_dimension=args.output_dimension,
+            output_dtype=args.output_dtype,
+            truncation=not args.no_truncation,
+            normalize_embeddings=not args.no_normalize,
+            timeout_seconds=args.timeout_seconds,
+            max_retries=args.max_retries,
+        )
+        result = evaluate_embedding_baseline(
+            sample_paths=sample_paths,
+            corpus_dir=args.corpus,
+            model_name=args.model,
+            out_path=out_path,
+            details_path=args.details or default_baseline_details_path(out_path),
+            keep_list=keep_list,
+            cache_dir=args.cache or default_embedding_cache_dir(args.model, root=Path("data/embeddings/v1")),
+            limit_samples=args.limit_samples,
+            batch_size=args.batch_size,
+            query_input_type=args.query_input_type or None,
+            passage_input_type=args.passage_input_type or None,
+            normalize_embeddings=not args.no_normalize,
+            embedder=embedder,
             progress=not args.no_progress,
             candidate_filter=args.candidate_filter,
         )

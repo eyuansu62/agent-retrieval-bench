@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 
 from agent_retrieval_bench.embedding_eval import (
+    VoyageAPIEmbedder,
     chunk_text_for_embedding,
     default_embedding_cache_dir,
     default_embedding_summary_path,
@@ -45,6 +46,15 @@ class CountingKeywordEmbedder(KeywordEmbedder):
 
     def encode(self, texts, batch_size=32):
         self.calls += 1
+        return super().encode(texts, batch_size=batch_size)
+
+
+class TypedKeywordEmbedder(KeywordEmbedder):
+    def __init__(self):
+        self.input_types = []
+
+    def encode(self, texts, batch_size=32, input_type=None):
+        self.input_types.append(input_type)
         return super().encode(texts, batch_size=batch_size)
 
 
@@ -183,6 +193,84 @@ class EmbeddingEvalTests(unittest.TestCase):
             self.assertIn("loading embedding model", output)
             self.assertIn("encoding chunks without cache", output)
             self.assertIn("evaluating samples", output)
+
+    def test_embedding_baseline_passes_query_and_document_input_types(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            samples = root / "samples.jsonl"
+            corpus_dir = root / "corpus"
+            chunks_path = corpus_dir / "o__r" / "base.chunks.jsonl"
+            write_jsonl(
+                samples,
+                [
+                    {
+                        "id": "s1",
+                        "task_type": "code2test",
+                        "repo": "o/r",
+                        "base_commit": "base",
+                        "query": {"changed_file": "src/auth.py", "intent": "auth failure"},
+                        "gold": {"related_tests": ["tests/test_auth.py"], "fix_commit": "fix"},
+                    }
+                ],
+            )
+            write_jsonl(
+                chunks_path,
+                [
+                    {
+                        "chunk_id": "c1",
+                        "repo": "o/r",
+                        "base_commit": "base",
+                        "path": "tests/test_auth.py",
+                        "kind": "file",
+                        "text": "auth assertion",
+                    }
+                ],
+            )
+            write_jsonl(
+                corpus_dir / "corpus_manifest.jsonl",
+                [{"repo": "o/r", "base_commit": "base", "status": "ok", "chunks_path": str(chunks_path)}],
+            )
+            embedder = TypedKeywordEmbedder()
+
+            evaluate_embedding_baseline(
+                sample_paths=[samples],
+                corpus_dir=corpus_dir,
+                model_name="typed",
+                embedder=embedder,
+                cache_dir=None,
+                query_input_type="query",
+                passage_input_type="document",
+            )
+
+            self.assertEqual(embedder.input_types, ["document", "query"])
+
+    def test_voyage_api_embedder_sends_typed_requests_and_normalizes(self):
+        requests = []
+
+        def fake_request(payload):
+            requests.append(dict(payload))
+            return {
+                "data": [
+                    {"index": index, "embedding": [3.0, 4.0]}
+                    for index, _text in enumerate(payload["input"])
+                ]
+            }
+
+        embedder = VoyageAPIEmbedder(
+            api_key="test-key",
+            request_func=fake_request,
+            output_dimension=512,
+            retry_base_seconds=0,
+        )
+
+        vectors = embedder.encode(["one", "two"], batch_size=1, input_type="document")
+
+        self.assertEqual(len(vectors), 2)
+        self.assertAlmostEqual(vectors[0][0], 0.6)
+        self.assertAlmostEqual(vectors[0][1], 0.8)
+        self.assertEqual([request["input_type"] for request in requests], ["document", "document"])
+        self.assertEqual(requests[0]["model"], "voyage-code-3")
+        self.assertEqual(requests[0]["output_dimension"], 512)
 
     def test_embedding_cache_is_keyed_by_passage_options(self):
         try:

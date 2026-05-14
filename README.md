@@ -167,6 +167,25 @@ arb eval-embedding \
   --no-keep-list
 ```
 
+Run Voyage `voyage-code-3` through the hosted API:
+
+```bash
+export VOYAGE_API_KEY=...
+
+arb eval-voyage \
+  --model voyage-code-3 \
+  --derived data/benchmark/v1 \
+  --corpus data/corpus/v1 \
+  --out data/eval/v1/voyage-code-3_summary.json \
+  --details data/eval/v1/voyage-code-3_details.jsonl \
+  --cache data/embeddings/v1/voyage-code-3 \
+  --candidate-filter all_files \
+  --batch-size 32 \
+  --no-keep-list
+```
+
+`eval-voyage` uses `input_type=query` for benchmark queries and `input_type=document` for corpus chunks. Voyage is usage-based, so run with `--limit-samples` first if you want to check API access and cache behavior before a full V1 run.
+
 Generate a leaderboard from all `*_summary.json` files:
 
 ```bash

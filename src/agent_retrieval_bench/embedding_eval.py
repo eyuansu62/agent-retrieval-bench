@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 import json
+import math
+import os
 import re
 import sys
+import time
+import urllib.error
+import urllib.request
 from collections import Counter
 from pathlib import Path
-from typing import Any, Iterable, Protocol, Sequence, TextIO
+from typing import Any, Callable, Iterable, Protocol, Sequence, TextIO
 
 from .baseline import (
     filter_candidate_chunks,
@@ -65,6 +70,123 @@ class SentenceTransformerEmbedder:
         )
 
 
+class VoyageAPIEmbedder:
+    def __init__(
+        self,
+        model_name: str = "voyage-code-3",
+        api_key: str | None = None,
+        api_base: str = "https://api.voyageai.com/v1",
+        output_dimension: int | None = None,
+        output_dtype: str = "float",
+        truncation: bool = True,
+        normalize_embeddings: bool = True,
+        timeout_seconds: float = 60.0,
+        max_retries: int = 5,
+        retry_base_seconds: float = 1.0,
+        request_func: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
+    ) -> None:
+        self.model_name = model_name
+        self.api_key = api_key or os.environ.get("VOYAGE_API_KEY")
+        self.api_base = api_base.rstrip("/")
+        self.output_dimension = output_dimension
+        self.output_dtype = output_dtype
+        self.truncation = truncation
+        self.normalize_embeddings = normalize_embeddings
+        self.timeout_seconds = timeout_seconds
+        self.max_retries = max(0, max_retries)
+        self.retry_base_seconds = max(0.0, retry_base_seconds)
+        self.request_func = request_func
+        if self.request_func is None and not self.api_key:
+            raise RuntimeError("Voyage evaluation requires VOYAGE_API_KEY or --api-key.")
+
+    def encode(
+        self,
+        texts: Sequence[str],
+        batch_size: int = 32,
+        input_type: str | None = None,
+    ) -> list[list[float]]:
+        if not texts:
+            return []
+        vectors: list[list[float]] = []
+        effective_batch_size = max(1, min(batch_size, 1000))
+        for start in range(0, len(texts), effective_batch_size):
+            batch = list(texts[start : start + effective_batch_size])
+            payload: dict[str, Any] = {
+                "input": batch,
+                "model": self.model_name,
+                "truncation": self.truncation,
+                "output_dtype": self.output_dtype,
+            }
+            if input_type:
+                payload["input_type"] = input_type
+            if self.output_dimension:
+                payload["output_dimension"] = self.output_dimension
+            response = self._request_embeddings(payload)
+            batch_vectors = self._extract_embeddings(response, expected_count=len(batch))
+            if self.normalize_embeddings:
+                batch_vectors = [normalize_vector(vector) for vector in batch_vectors]
+            vectors.extend(batch_vectors)
+        return vectors
+
+    def cache_metadata(self) -> dict[str, Any]:
+        return {
+            "provider": "voyage",
+            "api_base": self.api_base,
+            "output_dimension": self.output_dimension,
+            "output_dtype": self.output_dtype,
+            "truncation": self.truncation,
+            "normalize_embeddings": self.normalize_embeddings,
+        }
+
+    def _request_embeddings(self, payload: dict[str, Any]) -> dict[str, Any]:
+        if self.request_func is not None:
+            return self.request_func(payload)
+        last_error: Exception | None = None
+        for attempt in range(self.max_retries + 1):
+            try:
+                return self._post_json(payload)
+            except urllib.error.HTTPError as exc:
+                last_error = exc
+                if exc.code not in {408, 409, 425, 429, 500, 502, 503, 504} or attempt >= self.max_retries:
+                    message = exc.read().decode("utf-8", errors="replace")
+                    raise RuntimeError(f"Voyage embedding request failed with HTTP {exc.code}: {message}") from exc
+            except urllib.error.URLError as exc:
+                last_error = exc
+                if attempt >= self.max_retries:
+                    raise RuntimeError(f"Voyage embedding request failed: {exc}") from exc
+            if self.retry_base_seconds:
+                time.sleep(self.retry_base_seconds * (2**attempt))
+        raise RuntimeError(f"Voyage embedding request failed: {last_error}")
+
+    def _post_json(self, payload: dict[str, Any]) -> dict[str, Any]:
+        body = json.dumps(payload).encode("utf-8")
+        request = urllib.request.Request(
+            f"{self.api_base}/embeddings",
+            data=body,
+            headers={
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:
+            return json.loads(response.read().decode("utf-8"))
+
+    def _extract_embeddings(self, response: dict[str, Any], expected_count: int) -> list[list[float]]:
+        data = response.get("data")
+        if not isinstance(data, list):
+            raise RuntimeError("Voyage embedding response is missing a data list.")
+        ordered = sorted(data, key=lambda row: int(row.get("index", 0)) if isinstance(row, dict) else 0)
+        embeddings: list[list[float]] = []
+        for row in ordered:
+            if not isinstance(row, dict) or not isinstance(row.get("embedding"), list):
+                raise RuntimeError("Voyage embedding response contains an invalid embedding row.")
+            embeddings.append([float(value) for value in row["embedding"]])
+        if len(embeddings) != expected_count:
+            raise RuntimeError(f"Voyage returned {len(embeddings)} embeddings for {expected_count} inputs.")
+        return embeddings
+
+
 def evaluate_embedding_baseline(
     sample_paths: Iterable[Path],
     corpus_dir: Path,
@@ -78,6 +200,8 @@ def evaluate_embedding_baseline(
     device: str | None = None,
     query_prefix: str = "",
     passage_prefix: str = "",
+    query_input_type: str | None = None,
+    passage_input_type: str | None = None,
     normalize_embeddings: bool = True,
     trust_remote_code: bool = False,
     embedder: TextEmbedder | None = None,
@@ -152,12 +276,20 @@ def evaluate_embedding_baseline(
                 cache_dir=cache_dir,
                 batch_size=batch_size,
                 passage_prefix=passage_prefix,
+                input_type=passage_input_type,
                 normalize_embeddings=normalize_embeddings,
+                embedding_options=embedding_cache_metadata(actual_embedder, input_type=passage_input_type),
                 candidate_filter=candidate_filter,
                 progress_reporter=reporter,
             )
             vector_cache[key] = vectors
-        query_vector = encode_texts(actual_embedder, [query_text], batch_size=batch_size, show_progress_bar=False)[0]
+        query_vector = encode_texts(
+            actual_embedder,
+            [query_text],
+            batch_size=batch_size,
+            show_progress_bar=False,
+            input_type=query_input_type,
+        )[0]
         ranked = rank_chunks_by_vectors(query_vector, vectors, chunks)
         metrics = sample_metrics(gold_files, ranked)
         details.append(
@@ -207,7 +339,9 @@ def load_or_encode_chunk_vectors(
     cache_dir: Path | None,
     batch_size: int = 32,
     passage_prefix: str = "",
+    input_type: str | None = None,
     normalize_embeddings: bool = True,
+    embedding_options: dict[str, Any] | None = None,
     candidate_filter: str = "all_files",
     progress_reporter: "ProgressReporter | None" = None,
 ) -> Any:
@@ -219,9 +353,11 @@ def load_or_encode_chunk_vectors(
             chunk_texts_for_embedding(chunks, passage_prefix=passage_prefix),
             batch_size=batch_size,
             show_progress_bar=reporter.enabled,
+            input_type=input_type,
         )
 
     np = import_numpy()
+    embedding_options = embedding_options or {}
     repo = str(chunks[0].get("repo", "")) if chunks else "unknown"
     base_commit = str(chunks[0].get("base_commit", "")) if chunks else chunks_path.stem.split(".")[0]
     pair_dir = cache_dir / repo_slug(repo)
@@ -236,6 +372,7 @@ def load_or_encode_chunk_vectors(
             and meta.get("chunks_path") == str(chunks_path)
             and meta.get("passage_prefix") == passage_prefix
             and meta.get("normalize_embeddings") == normalize_embeddings
+            and meta.get("embedding_options", {}) == embedding_options
             and meta.get("candidate_filter", "all_files") == candidate_filter
         ):
             reporter.message(f"embedding cache hit: {vectors_path}")
@@ -244,7 +381,13 @@ def load_or_encode_chunk_vectors(
     texts = chunk_texts_for_embedding(chunks, passage_prefix=passage_prefix)
     reporter.message(f"encoding chunks: {len(texts)} chunks -> {vectors_path}")
     vectors = np.asarray(
-        encode_texts(embedder, texts, batch_size=batch_size, show_progress_bar=reporter.enabled),
+        encode_texts(
+            embedder,
+            texts,
+            batch_size=batch_size,
+            show_progress_bar=reporter.enabled,
+            input_type=input_type,
+        ),
         dtype="float32",
     )
     ensure_parent(vectors_path)
@@ -258,6 +401,7 @@ def load_or_encode_chunk_vectors(
                 "embedding_dim": int(vectors.shape[1]) if len(vectors.shape) == 2 else 0,
                 "normalize_embeddings": normalize_embeddings,
                 "passage_prefix": passage_prefix,
+                "embedding_options": embedding_options,
                 "candidate_filter": candidate_filter,
             },
             ensure_ascii=False,
@@ -275,11 +419,17 @@ def encode_texts(
     texts: Sequence[str],
     batch_size: int = 32,
     show_progress_bar: bool = False,
+    input_type: str | None = None,
 ) -> Sequence[Sequence[float]]:
     previous_progress = getattr(embedder, "show_progress_bar", None)
     if previous_progress is not None:
         setattr(embedder, "show_progress_bar", show_progress_bar)
     try:
+        if input_type is not None:
+            try:
+                return embedder.encode(texts, batch_size=batch_size, input_type=input_type)  # type: ignore[call-arg]
+            except TypeError:
+                return embedder.encode(texts, batch_size=batch_size)
         try:
             return embedder.encode(texts, batch_size=batch_size)
         except TypeError:
@@ -312,6 +462,21 @@ def vector_scores(query_vector: Sequence[float], chunk_vectors: Any) -> list[flo
 
 def dot_product(left: Sequence[float], right: Sequence[float]) -> float:
     return sum(float(a) * float(b) for a, b in zip(left, right))
+
+
+def normalize_vector(vector: Sequence[float]) -> list[float]:
+    norm = math.sqrt(sum(float(value) * float(value) for value in vector))
+    if norm == 0.0:
+        return [float(value) for value in vector]
+    return [float(value) / norm for value in vector]
+
+
+def embedding_cache_metadata(embedder: TextEmbedder, input_type: str | None = None) -> dict[str, Any]:
+    metadata_func = getattr(embedder, "cache_metadata", None)
+    metadata = dict(metadata_func()) if callable(metadata_func) else {}
+    if input_type is not None:
+        metadata["input_type"] = input_type
+    return metadata
 
 
 class ProgressReporter:
