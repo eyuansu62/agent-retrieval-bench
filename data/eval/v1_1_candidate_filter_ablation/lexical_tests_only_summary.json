@@ -1,0 +1,41 @@
+{
+  "candidate_filter": "tests_only",
+  "evaluated": 287,
+  "keep_list": null,
+  "metrics": {
+    "code2test": {
+      "MRR": 0.2770845740960929,
+      "Recall@10": 0.5345911949685535,
+      "Recall@20": 0.711006289308176,
+      "Recall@5": 0.3411949685534591,
+      "gold_coverage@8k": 0.33176100628930816,
+      "samples": 106
+    },
+    "comment2context": {
+      "MRR": 0.19337588660035843,
+      "Recall@10": 0.2833333333333333,
+      "Recall@20": 0.35416666666666663,
+      "Recall@5": 0.17708333333333331,
+      "gold_coverage@8k": 0.22708333333333336,
+      "samples": 80
+    },
+    "overall": {
+      "MRR": 0.15624054279517255,
+      "Recall@10": 0.2764227642276423,
+      "Recall@20": 0.3613240418118467,
+      "Recall@5": 0.1753774680603949,
+      "gold_coverage@8k": 0.18583042973286876,
+      "samples": 287
+    },
+    "trace2code": {
+      "MRR": 0.0,
+      "Recall@10": 0.0,
+      "Recall@20": 0.0,
+      "Recall@5": 0.0,
+      "gold_coverage@8k": 0.0,
+      "samples": 101
+    }
+  },
+  "mode": "corpus",
+  "skipped": {}
+}

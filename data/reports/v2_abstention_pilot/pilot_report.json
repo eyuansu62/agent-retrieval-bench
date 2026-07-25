@@ -1,0 +1,48 @@
+{
+  "audit_packet_candidates": 82,
+  "audit_path": "data/abstention/audit_clean_probe_v1/abstention_audit_packet.csv",
+  "audit_verdicts": {
+    "valid_no_gold": 82
+  },
+  "counterfactual": 32,
+  "counterfactual_share": 0.3902439024390244,
+  "gates": {
+    "audit_packet_candidates_ge_80": true,
+    "counterfactual_no_more_than_half": true,
+    "every_sample_has_resolution_evidence": true,
+    "final_clean_ge_50": true,
+    "has_local_gold_zero": true,
+    "no_query_contains_resolution_answer": true,
+    "organic_and_counterfactual_reported_separately": true,
+    "schema_valid": true,
+    "valid_rate_ge_90": true
+  },
+  "generated_at": "2026-06-12T15:00:05+00:00",
+  "has_local_gold_final": 0,
+  "inputs": {
+    "audit_packet": "data/abstention/audit_clean_probe_v1/abstention_audit_packet.jsonl",
+    "samples": [
+      "data/benchmark/v2_abstention_pilot/abstention.jsonl"
+    ]
+  },
+  "invalid_rows": [],
+  "missing_packet_ids": [],
+  "organic": 50,
+  "reasons": {
+    "counterfactual_wrong_repo": 32,
+    "external_service": 7,
+    "upstream_dependency": 41,
+    "user_error": 2
+  },
+  "selected_before_balancing": 82,
+  "selection": {
+    "max_counterfactual_share": 0.5,
+    "max_samples": 100
+  },
+  "status": "ready",
+  "total": 82,
+  "valid_rate": 1.0,
+  "verdicts": {
+    "valid_no_gold": 82
+  }
+}

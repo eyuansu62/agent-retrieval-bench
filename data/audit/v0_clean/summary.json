@@ -1,0 +1,68 @@
+{
+  "audit_path": "data/audit/v0_clean/audit_samples.csv",
+  "by_task": {
+    "code2test": {
+      "counts": {
+        "ambiguous": 1,
+        "noisy": 2,
+        "valid": 17
+      },
+      "ratios": {
+        "ambiguous": 0.05,
+        "leaked": 0.0,
+        "noisy": 0.1,
+        "other": 0.0,
+        "pending": 0.0,
+        "valid": 0.85
+      },
+      "total": 20
+    },
+    "comment2context": {
+      "counts": {
+        "noisy": 4,
+        "valid": 16
+      },
+      "ratios": {
+        "ambiguous": 0.0,
+        "leaked": 0.0,
+        "noisy": 0.2,
+        "other": 0.0,
+        "pending": 0.0,
+        "valid": 0.8
+      },
+      "total": 20
+    },
+    "testlog2code": {
+      "counts": {
+        "ambiguous": 2,
+        "noisy": 17,
+        "valid": 1
+      },
+      "ratios": {
+        "ambiguous": 0.1,
+        "leaked": 0.0,
+        "noisy": 0.85,
+        "other": 0.0,
+        "pending": 0.0,
+        "valid": 0.05
+      },
+      "total": 20
+    },
+    "trace2code": {
+      "counts": {
+        "valid": 2
+      },
+      "ratios": {
+        "ambiguous": 0.0,
+        "leaked": 0.0,
+        "noisy": 0.0,
+        "other": 0.0,
+        "pending": 0.0,
+        "valid": 1.0
+      },
+      "total": 2
+    }
+  },
+  "kept": 36,
+  "total": 62
+}

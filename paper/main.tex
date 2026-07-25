@@ -1,0 +1,712 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{hyperref}
+\usepackage[numbers,sort&compress]{natbib}
+
+\title{Agent Retrieval Bench: Evaluating Repository Context Retrieval for Coding Agents}
+\author{Anonymous Authors}
+\date{}
+
+\newcommand{\arb}{Agent Retrieval Bench}
+\newcommand{\code}[1]{\texttt{#1}}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Modern coding agents are usually evaluated by whether they eventually produce a correct patch, but patch generation depends on an earlier context-acquisition stage: the agent must find the repository files it needs to read. We introduce \arb{}, a file-level code retrieval benchmark for this upstream context-finding problem. Each sample is built from a real coding workflow signal and evaluated against a frozen base-commit repository; positive samples use the state before the resolving change. Unlike traditional code search, relevance in \arb{} is defined by what an agent needs next, not by direct semantic similarity between query and file. The benchmark covers four positive-retrieval tasks: \code{code2test}, \code{comment2context}, \code{trace2code}, and \code{edit2ripple}, which asks for additional files affected by an anchored change. A fifth, no-gold subset tests whether a retriever can abstain when repository-local context is not the right answer.
+
+The current V2 release contains 427 samples across 25 repositories: 345 positive examples across the four retrieval tasks and 82 evidence-backed no-gold examples. Its combined corpus manifest contains 308 base-commit snapshots, 392K files, and 7.9M chunks; the released samples use 271 of those snapshots. We report lexical, vectorless RepoMap, open-source embedding, selective-abstention, and logged agent context-selection results. Validity diagnostics show complete corpus coverage, zero schema or corpus invalid rows, and zero fatal shortcut leakage from exact gold paths, raw patches, fix commits, or generated review content. On the inherited 287-sample positive core, no retrieval family dominates: Qwen3-Embedding-4B is strongest overall by MRR and on \code{code2test}, Jina is strongest on \code{comment2context}, while RepoMap is strongest on \code{trace2code}. On \code{edit2ripple}, the BCY winner changes with the context budget. Logged trajectories over the positive core show that interactive agents still never touch any gold file on 27--35\% of samples. A 45-sample closed-tool seed-intervention pilot shows that retrieval-derived initial context reaches higher File F1 with less post-seed exploration than random non-gold context, while oracle gold context exposes substantial remaining headroom. These findings suggest that agent retrieval needs hybrid methods combining semantic vectors with repository structure, path/symbol signals, task-aware context selection, and calibrated abstention.
+\end{abstract}
+
+\section{Introduction}
+
+Coding agents are often judged at the end of the workflow: did the generated patch pass tests, resolve the issue, or satisfy a benchmark oracle? This end-to-end measurement is useful, but it hides the context-acquisition layer that precedes editing. Before an agent can reason about a change, it must identify the files that matter. Modern agents may do this through a mixture of codebase indexes, repository maps, grep-like tools, file reads, and iterative search~\citep{aiderrepomap,yang2024sweagent}, but the underlying question is the same: which repository context should enter the model before it edits?
+
+This makes agentic repository retrieval different from generic semantic code search. In traditional code search, relevance is usually defined by query-document semantic similarity, such as a natural-language description matching a function. In coding-agent workflows, relevance is defined by the next useful step in the software task. A pull request may describe an implementation change while the useful context is a regression test. A review comment may point at one file while the missing constraint lives in another module. A failure trace may mention a test file or stack frame while the root cause is an implementation file that does not look semantically similar to the error text. Agentic relevance is therefore often indirect, structural, or workflow-dependent.
+
+Interactive exploration does not remove the need to evaluate this layer; it changes the cost model. An agent can compensate for a weak initial context by spending more tool calls, tokens, and latency on search. In our logged trajectory track over the inherited positive core, an OpenAI strict-context agent reads 3.2 files per sample on average, while Codex CLI recovered contexts use about 6 file/path events per sample. Yet these trajectories still never touch any gold file on 35.2\% of OpenAI samples and 27.2--29.3\% of Codex samples. Conditional on samples where gold is eventually reached, the median first hit is step 2 for OpenAI and step 3 for Codex. These results show why static top-k scores should not be treated as full agent performance, but they also show that context acquisition remains a measurable bottleneck and cost center.
+
+\arb{} isolates this upstream problem. \arb{} is a file-level benchmark: given a workflow-derived query and a repository corpus at the base commit, a retriever or context engine must rank files that an agent would need to read. The benchmark is deliberately not patch-level. It does not ask whether an agent can synthesize the final edit. Instead, it measures whether the context-acquisition layer can find useful files before editing begins, and whether it can do so under realistic rank and context-budget constraints.
+
+The current release contains four workflow-grounded positive-retrieval tasks. \code{code2test} asks for related tests from PR or implementation-change signals. \code{comment2context} asks for additional context files beyond the reviewed file. \code{trace2code} asks for root-cause source files from reproduced failure output, while treating visible tests as auxiliary context rather than main gold. \code{edit2ripple} provides an anchored change and asks for additional files affected by that change. A fifth subset contains evidence-backed cases where the correct repository-level action is to abstain. Each sample is evaluated against a base-commit corpus, preventing fixed-code leakage.
+
+This paper makes six contributions:
+\begin{enumerate}
+  \item It formalizes \emph{agentic relevance}: files are relevant when they are useful next context for a coding workflow, not merely when they are semantically similar to the query.
+  \item It instantiates this relevance definition in four workflow-grounded positive tasks spanning PR-to-test, review-to-context, trace-to-code, and edit-to-ripple retrieval, plus a selective no-gold subset.
+  \item It releases 427 validated or evidence-backed samples across 25 repositories and 271 sample-used base commits, with 345 positive examples and 82 no-gold examples.
+  \item It contributes a data-hygiene protocol for agent retrieval: base-commit corpora, gold evidence, corpus/schema validation, fatal shortcut diagnostics, and task-diversity checks.
+  \item It compares lexical, RepoMap, embedding, logged agent context-selection, and post-hoc rank-fusion baselines, showing that interaction buys recall through extra context events while simple hybrid retrieval exposes complementary strengths.
+  \item It provides reproducible artifacts: benchmark samples, corpus chunks, baseline details, leaderboards, validity reports, and release checksums.
+\end{enumerate}
+
+The goal is not to claim that bug localization, test traceability, or code review assistance are new in isolation. The contribution is a unified evaluation semantics and hygiene standard for the context-acquisition layer used by coding agents.
+
+\section{Related Work}
+
+\paragraph{Code search and code intelligence.}
+CodeSearchNet~\citep{husain2019codesearchnet} and CodeXGLUE~\citep{lu2021codexglue} established influential benchmarks for semantic code search and broader code-intelligence tasks. These benchmarks evaluate representation learning and matching between natural language and code, often at the function or snippet level. \arb{} differs in both retrieval unit and query distribution: it evaluates file-level repository context retrieval from coding workflow signals, where the relevant file may be a test, a cross-module context file, or a root-cause source file that is not semantically close to the query.
+
+\paragraph{Repository-level code context.}
+RepoBench evaluates repository-level code auto-completion and highlights the importance of cross-file context~\citep{liu2023repobench}. \arb{} is complementary: instead of completing code at a known location, it asks which repository files an agent should inspect before editing. This shifts the problem from using context to finding context.
+
+\paragraph{End-to-end coding-agent evaluation and localization.}
+SWE-bench~\citep{jimenez2023swebench} and SWE-agent~\citep{yang2024sweagent} evaluate realistic software engineering agents on full issue-resolution workflows. Agentless~\citep{xia2024agentless} makes localization an explicit stage before repair, and LocAgent~\citep{chen2025locagent} studies graph-guided code localization for issue resolution. \arb{} targets a narrower but important intermediate stage. End-to-end patch success can fail because of retrieval, reasoning, editing, or validation. \arb{} isolates retrieval, making it possible to diagnose whether the agent found the necessary files before patch generation.
+
+\paragraph{Agentic retrieval and exploration benchmarks.}
+Recent work has begun to isolate context finding from patch generation. CORE-Bench evaluates code retrieval for agentic coding across code understanding, issue-to-edit localization, and broader context retrieval~\citep{zhang2026corebench}. SWE-Explore evaluates repository exploration under a fixed line budget and derives line-level ground truth from successful agent trajectories~\citep{zhang2026sweexplore}. \arb{} is closest in spirit to this line, but occupies a different point in the design space. CORE-Bench emphasizes large-scale retrieval from issue and user-request style inputs, including edit-location and broader-context labels. SWE-Explore emphasizes adaptive repository exploration and line-budget efficiency. \arb{} instead focuses on leakage-controlled \emph{workflow-signal} file retrieval: PR-to-test, review-comment-to-context, trace-to-root-cause, and anchored-edit-to-ripple queries, together with evidence-backed abstention cases. Its primary gold definition is the file an agent needs to read next, so visible stack frames and already-given files are not automatically successes. It trades scale for workflow-specific semantics, base-commit hygiene, fatal shortcut diagnostics, realistic distractors, context-budget curves, selective retrieval, and a controlled seed-intervention pilot that checks whether retrieval seeds affect agent context acquisition.
+
+\begin{table*}[t]
+\centering
+\caption{Positioning relative to nearby repository localization and agentic retrieval settings.}
+\label{tab:nearby-work}
+\small
+\begin{tabularx}{\textwidth}{p{0.20\textwidth}p{0.22\textwidth}p{0.24\textwidth}X}
+\toprule
+Work & Query signal & Target relevance & Distinguishing evaluation focus \\
+\midrule
+SWE-bench localization / Agentless & Issue statements & Edit locations or files & Patch pipeline localization stage \\
+LocAgent & Issue statements & Code entities / locations & Graph-guided multi-hop localization \\
+CORE-Bench & User requests and SWE-bench-style tasks & Code, edit locations, broader context & Scale and broad retrieval coverage \\
+SWE-Explore & Issue statements & Line regions from successful trajectories & Adaptive exploration under line budgets \\
+\arb{} & PR, review, trace, and anchored-edit signals & Next-context files or evidence-backed abstention & Workflow semantics, BCY/PES, selective retrieval, seed intervention \\
+\bottomrule
+\end{tabularx}
+\end{table*}
+
+\paragraph{Traceability and test-code links.}
+Software traceability studies links among requirements, code, tests, and other development artifacts~\citep{gotel2012traceability}. \code{code2test} is related to this tradition because the desired files are tests associated with an implementation or PR signal. The difference is that \arb{} does not reconstruct maintained trace matrices or coverage links. It asks whether a coding agent can infer which tests are useful next context from a workflow-derived query while avoiding direct test-path leakage.
+
+\paragraph{Bug and fault localization.}
+Bug-localization benchmarks and datasets such as Defects4J study mapping bug reports or failures to source locations~\citep{just2014defects4j}, and IR-based bug localization work studies source-file ranking from textual bug evidence~\citep{akbar2020irbuglocalization}. \arb{}'s \code{trace2code} task is adjacent, but it is framed around agent context retrieval from reproduced failure output. The gold files are root-cause source files needed for editing; visible tests and stack frames are evidence rather than automatically counted targets.
+
+\paragraph{RAG and repository maps.}
+Retrieval-augmented generation motivates retrieving evidence before generation~\citep{lewis2020rag}, and coding agents apply this idea to repository context. Practical systems such as Aider's repo map use structure and symbols rather than only vector similarity~\citep{aiderrepomap}. \arb{} provides an evaluation target for this setting and shows that semantic embeddings and structure-aware retrieval are complementary.
+
+\section{Problem Definition}
+
+An \arb{} sample consists of a repository, a base commit, a query, and a set of gold files. The candidate corpus is the repository at the base commit. A retriever receives the query and ranks candidate files. Metrics are computed at the file level.
+
+This design follows the way coding agents consume context. A model typically needs readable source files, tests, configuration files, or related modules. Chunk-level retrieval is useful internally for scoring, but the benchmark's primary question is whether the correct file appears in the ranked file list.
+
+\paragraph{Query.}
+The query is derived from a real coding workflow signal: a PR title/body or implementation-change summary, a review comment plus the reviewed file, a reproduced failure command and failure excerpt, an anchored edit with change intent, or an issue whose resolution may lie outside the repository. Queries remove fatal shortcuts: final patches, raw fix diffs, fix commit hashes, generated review content, and exact gold paths. For trace-to-code retrieval, visible stack frames remain part of the realistic failure signal rather than automatic leakage.
+
+\paragraph{Corpus.}
+The corpus is built from the repository at the base commit. This is the state before the resolving fix. Candidate files are chunked for indexing and scoring, but ranked output is deduplicated to file paths.
+
+\paragraph{Gold.}
+Gold files are files an agent needs to read for the task. For \code{code2test}, gold files are related tests. For \code{comment2context}, gold files are additional context files; the reviewed file is recorded as given context and is not counted as main gold. For \code{trace2code}, gold files are root-cause source files; tests can be supporting evidence but are not main gold. For \code{edit2ripple}, gold files are additional affected source or test files beyond the anchor. Selective no-gold samples instead carry an empty gold set and an audited abstention reason.
+
+\paragraph{Agentic relevance.}
+We define a file as \emph{agentically relevant} when reading it would materially help the agent take the next correct step in the workflow, even if the query and file are not directly semantically similar. To make this definition operational, we annotate each sample with a dominant relevance mode: \emph{semantic-direct}, where query text directly names or describes target-file terms; \emph{structural-indirect}, where the target is reached through neighboring modules, imports, symbols, or given-file adjacency; \emph{workflow-conventional}, where relevance follows software workflow convention such as implementation-to-test or review-to-context expectations; and \emph{causal-indirect}, where the query exposes a symptom or visible frame while the target is the root-cause implementation file. The annotation is a qualitative Codex-authored rubric used for mechanism analysis, not an independent human gold-correctness audit.
+
+\paragraph{Metrics.}
+The main metrics are Recall@5, Recall@10, Recall@20, MRR, and Budgeted Context Yield (BCY@B). Recall@k measures the fraction of gold files retrieved in the top k unique files. MRR uses the first ranked gold file. BCY@B asks how much labeled gold context fits inside a fixed token budget after a retriever ranks files. Our canonical packing protocol deduplicates ranked paths, renders each file from the released corpus as \code{\#\#\# \{path\}\textbackslash n\{content\}\textbackslash n}, greedily packs files by rank, and prefix-truncates only at the budget boundary. BCY uses a deterministic regex tokenizer, \code{regex\_code\_tokenizer\_v1}, which counts identifiers, number spans, and non-whitespace symbols as tokens. Path headers and separator newlines count against the budget. Formally, let \(G_i\) be the gold files for sample \(i\), \(L_{ig}\) the available corpus-text length of gold file \(g\), and \(m_{ig}(B)\) the number of its non-header content tokens packed under budget \(B\). For a minimum-content threshold \(\tau\),
+\[
+\mathrm{BCY}_{\tau}@B=\frac{1}{N}\sum_{i=1}^{N}\frac{1}{|G_i|}\sum_{g\in G_i}\mathbf{1}\!\left[m_{ig}(B)\geq\min(\tau,L_{ig})\right].
+\]
+Canonical BCY uses \(\tau=1\), measuring file exposure rather than full-file comprehension; the \(\min\) term gives complete short files credit. We report BCY curves at 4k, 8k, 16k, and 32k tokens, and use BCY@8k as the compact main-table point. Current details artifacts retain the top 20 unique files, so larger-budget points are computed from that stored prefix and are lower bounds whenever those files do not fill the budget. We treat non-gold context share as a diagnostic rather than a primary metric because useful but unjudged files may otherwise be counted as waste.
+
+For logged trajectories, agent-native quantities are defined for a \emph{pair} of a retriever and an agent scaffold. Let \(A_i\) indicate whether the agent trajectory touches a gold file for sample \(i\), and let \(R_i@k\) indicate whether the retriever places any gold file in its top \(k\). We report the resulting 2-by-2 complementarity matrix: both hit, retriever-only, agent-only, and both miss. We also report Potential Exploration Savings, \(\mathrm{PES}@k = \frac{1}{N}\sum_i \max(T_i-1,0)\mathrm{I}[R_i@k]\), where \(T_i\) is the agent's first gold-touch event. PES is an upper-bound proxy for avoidable gold-localization delay, not a causal estimate of saved tool calls.
+
+\section{Benchmark Tasks}
+
+\subsection{\code{code2test}}
+
+\code{code2test} simulates a coding agent receiving a PR or implementation-change signal and needing to identify relevant tests. The query may mention implementation files or behavior, but construction excludes exact test paths and final-patch evidence. The gold files are review-confirmed related tests.
+
+\subsection{\code{comment2context}}
+
+\code{comment2context} simulates a code review setting. The agent sees a review comment and the reviewed file. The benchmark asks for additional files needed to understand or satisfy the comment. The reviewed file is treated as given context, not as gold.
+
+\subsection{\code{trace2code}}
+
+\code{trace2code} simulates a reproduced failure. The query contains the command and failure excerpt. The gold files are root-cause source files. Tests and failure frames can be supporting context, but they are not counted as main gold unless they are the audited root cause.
+
+\subsection{\code{edit2ripple}}
+
+\code{edit2ripple} simulates impact analysis after a localized edit is known. The query contains an anchor file, an anchor diff, and the change intent. The anchor file is given context rather than gold; the retriever must find additional source or test files affected by the change. Gold files are backed by changed-file evidence and audited ripple relations such as shared symbols, component proximity, or required test updates.
+
+\subsection{Selective No-Gold Retrieval}
+
+The no-gold subset contains issue signals for which repository-local retrieval should not return a file, for example because maintainer evidence attributes the problem to an upstream dependency or external platform. These samples have an empty gold set and an audited no-gold reason. They are evaluated only in the selective-retrieval protocol: abstention is correct, while returning repository files is a false return.
+
+\section{Dataset Construction}
+
+V2 packages the three inherited positive tracks together with the new \code{edit2ripple} and no-gold subsets. The inherited tracks retain their reviewed labels, while the additions use task-specific evidence and audit schemas.
+
+\begin{table}[t]
+\centering
+\caption{V2 dataset composition. Positive tasks use file-level retrieval metrics; no-gold samples are evaluated by selective abstention.}
+\label{tab:dataset-composition}
+\begin{tabular}{llr}
+\toprule
+Subset & Evaluation role & Samples \\
+\midrule
+\code{code2test} & positive retrieval & 106 \\
+\code{comment2context} & positive retrieval & 80 \\
+\code{trace2code} & positive retrieval & 101 \\
+\code{edit2ripple} & positive retrieval & 58 \\
+\code{abstention} & no-gold decision & 82 \\
+\midrule
+Positive subtotal & & 345 \\
+V2 total & & 427 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The release contains 427 samples across 25 repositories and uses 271 distinct repo/base pairs. The combined V2 corpus manifest is a reusable superset with 308 repo/base rows across 29 repositories, 391,932 files, and 7,922,369 chunks.\footnote{The manifest preserves 37 reusable snapshots not referenced by the released samples; evaluation selects the 271 sample-used repo/base pairs.}
+
+The corpus scale is intentionally much larger than the sample count. \arb{} evaluates whether a small set of audited workflow signals can retrieve files from large real repository snapshots. This makes the benchmark diagnostic rather than web-scale: each sample is expensive to validate, but each query searches a large, realistic candidate universe.
+
+Exact text deduplication over the inherited positive-core evaluation corpora finds 1,118,431 unique embedding texts and 5,092,534 duplicate chunk texts, an 81.99\% duplicate fraction. This motivates shared corpus-embedding caches for practical evaluation because nearby base commits reuse many identical chunks.
+
+\paragraph{Realistic distractors.}
+\arb{} also preserves local distractors that are common in agent workflows. In \code{code2test}, queries may expose implementation files, symbols, or behavior while the target tests live elsewhere. In \code{comment2context}, the reviewed file is deliberately given to the agent but is not sufficient context and is not counted as main gold. In \code{trace2code}, visible stack frames and test paths remain in the failure signal, but the target is the root-cause source file. When available, construction records hard-negative files, and official evaluation uses the full file corpus rather than task-specific candidate filters. Thus a method must separate useful next context from nearby files that are visible, plausible, or semantically similar but insufficient.
+
+\section{Quality and Leakage Controls}
+
+\arb{}'s main risk is shortcut leakage. If a query contains the final patch, the fixing commit, or the exact gold path, the retrieval problem can collapse into string matching. We therefore separate dataset validity into three checks: gold correctness, corpus/schema validity, and shortcut diagnostics.
+
+\paragraph{Gold correctness and corpus validity.}
+All 345 positive samples have validated or evidence-backed gold context in their released base-commit corpus. The inherited 287-sample core records span/block-level evidence and query provenance; all 58 \code{edit2ripple} additions carry a \code{valid} audit verdict and changed-file ripple evidence. The 82 no-gold samples carry \code{valid\_no\_gold} verdicts and maintainer-resolution evidence for why repository-local retrieval should abstain. Release validation reports zero invalid schema or corpus rows across the five subsets. This does not mean that every possible useful file is labeled, but it establishes that positive golds and no-gold decisions are corpus-backed and reviewable.
+
+\paragraph{Shortcut diagnostics.}
+The fatal leakage diagnostic checks exact gold-path leakage, raw patch or diff leakage, fix-commit hash leakage, and generated-review leakage. All fatal categories are zero. We state the paper claim narrowly: the benchmark excludes direct answer leakage from exact paths, patches, commits, and generated review artifacts while preserving realistic workflow evidence.
+
+\paragraph{Task diversity.}
+The positive set contains 106 \code{code2test}, 80 \code{comment2context}, 101 \code{trace2code}, and 58 \code{edit2ripple} samples. We report task-level results because method rankings change by workflow signal and, for \code{edit2ripple}, by context budget. The 82 no-gold samples are reported separately because abstention metrics are not commensurate with positive-only Recall or MRR.
+
+\begin{table}[t]
+\centering
+\caption{Dataset validity diagnostics for V2. Fatal leakage categories are exact shortcuts that would directly reveal a positive sample's answer.}
+\label{tab:validity-diagnostics}
+\begin{tabular}{lr}
+\toprule
+Diagnostic & Result \\
+\midrule
+Total samples & 427 \\
+Validated/evidence-backed positive gold & 345 / 345 \\
+Evidence-backed no-gold decisions & 82 / 82 \\
+Schema or corpus invalid rows & 0 \\
+Exact gold-path leakage & 0 \\
+Raw patch / diff leakage & 0 \\
+Fix-commit hash leakage & 0 \\
+Generated-review leakage & 0 \\
+Positive task families with non-trivial method spread & 4 / 4 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Baselines}
+
+We evaluate three static retrieval families. BM25 is a standard term-frequency lexical baseline with Robertson/Sparck Jones IDF and length normalization. The \code{lexical} row is a path-aware TF-IDF-style heuristic with path, basename, and symbol bonuses; it should not be read as standard BM25. RepoMap is a vectorless repository-structure baseline inspired by coding-agent repo maps. It ranks files using path, symbol, reference, and repository graph signals. Embedding baselines use open-source code/text embedding models. The positive-task evaluations include Jina code embeddings, Qwen3-Embedding-4B, Qwen3-Embedding-8B, pplx-embed-v1-4b, and nomic-embed-code. Hosted paid models are reported only in the separate logged context-selection track.
+
+All positive-task rows use \code{candidate\_filter=all\_files}. The aggregate core leaderboard, relevance taxonomy, RRF, and trajectory joins retain the inherited 287-sample positive core so that their static and agent artifacts remain exactly aligned. The 58-sample \code{edit2ripple} expansion is evaluated with the same static protocol in Table~\ref{tab:edit2ripple}; the 82 no-gold samples enter only the 427-sample selective-retrieval evaluation. We do not mix no-gold decisions into positive-only Recall or MRR.
+
+\section{Main Results}
+
+\subsection{Inherited Positive-Core Leaderboard}
+
+Qwen3-Embedding-4B has the best overall MRR, but the margin is narrow and the aggregate ranking hides strong task-level differences.
+
+\begin{table*}[t]
+\centering
+\caption{Aggregate leaderboard on the inherited 287-sample positive core. Rows use \code{candidate\_filter=all\_files}; V2 extension results are reported separately.}
+\label{tab:overall-leaderboard}
+\begin{tabular}{llrrrrr}
+\toprule
+Model & Family & R@5 & R@10 & R@20 & MRR & BCY@8k \\
+\midrule
+Qwen3-Embedding-4B & embedding & 0.2852 & 0.4102 & 0.6143 & 0.2296 & 0.3079 \\
+Qwen3-Embedding-8B & embedding & 0.3293 & 0.5348 & 0.7070 & 0.2272 & 0.3449 \\
+pplx-embed-v1-4b & embedding & 0.2742 & 0.4173 & 0.5929 & 0.2143 & 0.3288 \\
+aider-style-repomap & repo map & 0.3033 & 0.4728 & 0.6367 & 0.2120 & 0.3828 \\
+jina-code-embeddings-0.5b & embedding & 0.2201 & 0.3066 & 0.4491 & 0.1813 & 0.2567 \\
+nomic-embed-code & embedding & 0.2569 & 0.3448 & 0.5145 & 0.1810 & 0.2539 \\
+BM25 & lexical & 0.1864 & 0.3066 & 0.4344 & 0.1517 & 0.1974 \\
+lexical & lexical & 0.1922 & 0.3182 & 0.4750 & 0.1402 & 0.2282 \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+The top four rows are close: Qwen3-Embedding-4B (0.2296 MRR), Qwen3-Embedding-8B (0.2272), pplx-embed-v1-4b (0.2143), and RepoMap (0.2120). The narrow aggregate margin is one reason we emphasize task-level and rank-depth analysis.
+
+\subsection{Task Winners}
+
+The best model changes by task.
+
+\begin{table}[t]
+\centering
+\caption{Positive-task winners by MRR and Recall@20. The aggregate row uses the inherited positive core.}
+\label{tab:task-winners}
+\begin{tabular}{llrr}
+\toprule
+Task & Best MRR Model & MRR & Best R@20 \\
+\midrule
+positive core & Qwen3-Embedding-4B & 0.2296 & Qwen3-Embedding-8B \\
+\code{code2test} & Qwen3-Embedding-4B & 0.3225 & Qwen3-Embedding-4B \\
+\code{comment2context} & jina-code-embeddings-0.5b & 0.3043 & Qwen3-Embedding-8B \\
+\code{trace2code} & aider-style-repomap & 0.2742 & aider-style-repomap \\
+\code{edit2ripple} & pplx-embed-v1-4b & 0.2877 & Qwen3-Embedding-4B \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+These task winners support the central claim: different agentic retrieval signals require different inductive biases. A benchmark that reports only a single aggregate score would obscure this.
+
+\subsection{Agentic Relevance Modes}
+
+The relevance taxonomy makes the benchmark's central claim more concrete: agentic retrieval is not one relation between a query and a document. Table~\ref{tab:relevance-taxonomy} annotates the inherited 287-sample positive core, which contains direct semantic cases, workflow-conventional source-to-test and review-to-context cases, a smaller structural-indirect slice, and a causal-indirect trace slice. Extending this mechanism taxonomy to \code{edit2ripple} is left separate because one ripple sample can combine structural and workflow-conventional evidence.
+
+\begin{table}[t]
+\centering
+\caption{Agentic relevance taxonomy. Each sample receives one dominant mode using a Codex-authored rubric.}
+\label{tab:relevance-taxonomy}
+\begin{tabular}{lrrrr}
+\toprule
+Mode & Total & \code{code2test} & \code{comment2context} & \code{trace2code} \\
+\midrule
+Semantic-direct & 96 & 44 & 52 & 0 \\
+Structural-indirect & 23 & 0 & 23 & 0 \\
+Workflow-conventional & 67 & 62 & 5 & 0 \\
+Causal-indirect & 101 & 0 & 0 & 101 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+This taxonomy also explains the family-level behavior behind the aggregate leaderboard. Table~\ref{tab:relevance-type-results} reports the best MRR and best Recall@20 method within each relevance mode. Semantic-direct and workflow-conventional cases favor embedding-heavy or fused rankers. Causal-indirect cases reverse the picture: RepoMap has the best MRR and RRF(Qwen3-8B+RepoMap) has the best Recall@20, while lexical and grep baselines are also competitive. The structural-indirect slice is smaller and should be read as diagnostic rather than definitive; here, embeddings and fusion are close, suggesting that this category needs more samples before supporting a strong family-level claim.
+
+\begin{table}[t]
+\centering
+\caption{Best methods by agentic relevance mode. R@20 and MRR are computed within each taxonomy slice.}
+\label{tab:relevance-type-results}
+\begin{tabular}{lrrr}
+\toprule
+Mode & n & Best MRR & Best R@20 \\
+\midrule
+Semantic-direct & 96 & 0.3939 RRF-3 & 0.7448 RRF-3 \\
+Structural-indirect & 23 & 0.2213 Qwen3-4B & 0.5725 RRF \\
+Workflow-conventional & 67 & 0.2876 Qwen3-4B & 0.6463 RRF-3 \\
+Causal-indirect & 101 & 0.2742 RepoMap & 0.8795 RRF-Q8+RM \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Simple Hybrid Rank Fusion}
+
+The positive-core task split suggests that semantic and structure-aware retrievers are complementary. To test whether this complementarity is visible without training a new model, we apply reciprocal-rank fusion (RRF, \(k=60\)) to the stored top-20 file rankings from Qwen3-Embedding-8B and RepoMap. Because this post-hoc fusion only uses file rankings, we report rank metrics in the dedicated fusion table; its top-20-limited BCY is shown separately in the context-budget comparison.
+
+\begin{table}[t]
+\centering
+\caption{Post-hoc RRF fusion of Qwen3-Embedding-8B and RepoMap on the inherited positive core.}
+\label{tab:rrf-fusion}
+\begin{tabular}{lrrrr}
+\toprule
+Task & R@20 & MRR & Any@20 & nDCG@20 \\
+\midrule
+overall & 0.7331 & 0.2713 & 0.8153 & 0.3651 \\
+\code{code2test} & 0.6972 & 0.2811 & 0.7642 & 0.3662 \\
+\code{comment2context} & 0.5958 & 0.2635 & 0.7375 & 0.3136 \\
+\code{trace2code} & 0.8795 & 0.2672 & 0.9307 & 0.4048 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+This simple fusion improves overall MRR from the best single-run value of 0.2296 to 0.2713 and improves overall Recall@20 from 0.7070 to 0.7331. On \code{trace2code}, it also raises Recall@20 above both inputs (0.8795 versus 0.8366 for RepoMap and 0.7970 for Qwen3-Embedding-8B). The result does not make a single universal retriever: \code{code2test} MRR remains slightly below Qwen3-Embedding-4B. Instead, it demonstrates that the benchmark exposes usable complementarity between semantic and structural signals.
+
+\subsection{Context-Budget and Agent Context Selection}
+
+Top-k retrieval metrics do not fully determine whether an agent can use the retrieved files under a realistic context budget. We therefore also report canonical BCY@8k and a matched top-3/final-context file-F1 comparison between static retrievers and logged agent trajectories.
+
+\begin{table}[t]
+\centering
+\caption{Positive-core context-budget and context-selection results. Static retrievers are measured by BCY@8k and matched top-3 file F1 where available; agent rows use logged final-context trajectories.}
+\label{tab:context-selection}
+\begin{tabular}{llcc}
+\toprule
+Method & Type & BCY@8k & Top-3 / final File F1 \\
+\midrule
+RRF(Qwen3-8B+RepoMap) & retriever & 0.4884 & -- \\
+RepoMap & retriever & 0.3828 & 0.1102 \\
+Qwen3-Embedding-4B & retriever & 0.3079 & 0.1247 \\
+OpenAI GPT-5.4-mini strict & agent & -- & 0.3113 \\
+Codex CLI GPT-5.4 & agent & -- & 0.3342 \\
+Codex CLI GPT-5.5 & agent & -- & 0.3255 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+We test whether canonical BCY is artificially inflated by the one-token exposure convention by recomputing BCY@8k with \(\tau\in\{1,16,32,64,128\}\). Across all 12 positive-core methods, the ordering is unchanged and the largest absolute decrease from \(\tau=1\) to 128 is 0.0081. The eight \code{edit2ripple} methods are likewise unchanged in order, with a maximum decrease of 0.0058. Thus the reported comparisons do not depend on crediting a boundary-truncated gold file after only one content token.
+
+These results should not be read as evidence that static retrieval is irrelevant. They show that an interactive agent can buy better final context by spending additional context-acquisition events. We therefore also summarize the cost proxy in the logged trajectories.
+
+\begin{table}[t]
+\centering
+\caption{Logged positive-core context-acquisition cost. Any-gold is the fraction of samples where any gold file appears in the logged context events. Median first hit is computed over successful samples. Codex rows use recovered file/path events, so they are cost proxies rather than wall-clock measurements.}
+\label{tab:trajectory-cost}
+\begin{tabular}{lrrr}
+\toprule
+Method & Events/sample & Any-gold & Median first hit \\
+\midrule
+OpenAI GPT-5.4-mini strict & 3.2 & 0.648 & 2 \\
+Codex CLI GPT-5.4 & 6.2 & 0.728 & 3 \\
+Codex CLI GPT-5.5 & 6.5 & 0.707 & 3 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Read in reverse, Any-gold is also a miss-rate diagnostic. Even with interactive exploration, the logged agents never touch any gold file on 35.2\% of OpenAI strict-context samples and 27.2--29.3\% of Codex samples. The median first-hit numbers are therefore conditional on successful context acquisition, not evidence that all agents quickly find the needed files.
+
+We then join the logged trajectories with static retriever ranks on the same sample IDs. The most informative subset is \emph{late-hit}: samples where the agent eventually reaches gold, but only after more than three context events. These are cases where a better starting context can plausibly reduce gold-localization delay.
+
+\begin{table}[t]
+\centering
+\caption{Retriever coverage on late-hit positive-core samples. Late-hit samples are those where the logged agent first reaches a gold file after more than three context events.}
+\label{tab:late-hit-join}
+\begin{tabular}{llrrrr}
+\toprule
+Agent & Retriever & Samples & Events/sample & Any@10 & Any@20 \\
+\midrule
+Codex GPT-5.4 & Qwen3-8B & 77 & 7.6 & 0.675 & 0.818 \\
+Codex GPT-5.4 & Qwen3-4B & 77 & 7.6 & 0.623 & 0.779 \\
+Codex GPT-5.5 & Qwen3-8B & 73 & 8.1 & 0.726 & 0.863 \\
+Codex GPT-5.5 & Qwen3-4B & 73 & 8.1 & 0.658 & 0.836 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The same join also exposes complementarity rather than a one-sided ``retriever rescues agent'' story. Table~\ref{tab:complementarity} reports the 2-by-2 matrix for Codex CLI GPT-5.4 trajectories and top-20 retriever hits. Retriever-only cases are samples where static retrieval finds gold that the agent never touches; agent-only cases are the reverse, where interaction reaches gold that the static retriever misses. PES@20 is the potential localization-delay upper bound defined above.
+
+\begin{table}[t]
+\centering
+\caption{Trajectory-conditioned complementarity for Codex CLI GPT-5.4 at top 20. Rows sum to one over the 287 positive-core samples.}
+\label{tab:complementarity}
+\begin{tabular}{lrrrrr}
+\toprule
+Retriever & Both hit & Retriever-only & Agent-only & Both miss & PES@20 \\
+\midrule
+Qwen3-4B & 0.509 & 0.178 & 0.220 & 0.094 & 1.213 \\
+Qwen3-8B & 0.627 & 0.167 & 0.101 & 0.105 & 1.345 \\
+RepoMap & 0.592 & 0.125 & 0.136 & 0.146 & 1.233 \\
+RRF(Qwen3-8B+RepoMap) & 0.652 & 0.164 & 0.077 & 0.108 & 1.373 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+This cost view turns the agent-vs-retriever comparison into a sharper motivation for \arb{}. Qwen3-Embedding-4B reaches 0.686 Any@20 as a static ranking, close to the OpenAI trajectory's 0.648 any-gold-read rate, but its matched top-3 context F1 is only 0.1247. On late-hit Codex samples, Qwen3-8B already places gold in the top 20 for more than 80\% of cases. The complementarity matrix shows the other side as well: interactive exploration still reaches gold in samples where a static retriever misses. The gap means that compact context selection, rank depth, and exploration cost are different evaluation surfaces. A better retrieval layer can seed the agent closer to useful files, while interaction remains necessary for cases static retrieval misses.
+
+We further run a controlled seed intervention over 45 positive-core samples, 15 from each inherited task family. The agent policy and tool budget are fixed: Docker-isolated Codex GPT-5.5 can only request evaluator-mediated \code{list\_dir}, \code{grep}, \code{read\_file}, and \code{submit} actions. The only intervention is the initial context seed. We compare no seed, a random non-gold seed, lexical and embedding seeds, an RRF hybrid seed, and an oracle seed containing gold files. The random arm controls for the effect of merely adding context; the oracle arm estimates headroom when localization is solved.
+
+\begin{table*}[t]
+\centering
+\caption{Closed-tool seed-intervention pilot on 45 stratified positive-core samples. All rows use the same Codex GPT-5.5 closed-tool policy; only the initial context seed changes. Post-seed tokens exclude preloaded seed context.}
+\label{tab:seed-intervention}
+\small
+\begin{tabular}{lrrrrrrrr}
+\toprule
+Arm & n & Final F1 & \(\Delta\)F1 & Any-gold & First hit & Calls & Post toks & Seed toks \\
+\midrule
+No seed & 45 & 0.3222 & 0.0000 & 0.5111 & 3.0 & 3.71 & 2137.3 & 0.0 \\
+Random & 45 & 0.3437 & 0.0215 & 0.7333 & 3.0 & 8.49 & 3681.7 & 2427.8 \\
+Lexical & 45 & 0.3981 & 0.0759 & 0.8000 & 2.0 & 6.24 & 2243.9 & 3061.1 \\
+Qwen8B & 45 & 0.3726 & 0.0504 & 0.7556 & 1.0 & 5.51 & 2047.7 & 3204.2 \\
+RRF & 45 & 0.3967 & 0.0744 & 0.8000 & 1.0 & 5.42 & 1856.7 & 3298.8 \\
+Oracle & 45 & 0.6337 & 0.3115 & 1.0000 & 0.0 & 4.18 & 1736.4 & 1781.3 \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+Table~\ref{tab:seed-intervention} shows that extra context and prompt perturbation already help: random non-gold context improves final File F1 by 0.0215 and raises any-gold acquisition. This makes the intervention a conservative test of seed quality rather than a pure comparison against an inert control. The retrieval-derived seeds are stronger because they improve more efficiently than random context: lexical and RRF seeds add about 0.075 File F1, reach gold earlier, and require substantially fewer post-seed read tokens and tool calls than the random arm. Qwen3-8B reaches gold earliest but has a smaller final-F1 gain, showing that early gold contact and final context selection are related but distinct. Oracle gold context raises final File F1 by 0.3115, rescues every no-seed miss, and still does not reach perfect final precision.
+
+\begin{table}[t]
+\centering
+\caption{Paired seed-intervention deltas against the no-seed arm. Rescue/no-seed miss is the fraction of no-seed misses that become any-gold hits under the seed.}
+\label{tab:seed-intervention-paired}
+\small
+\begin{tabular}{lrrrr}
+\toprule
+Arm & Improved & Worsened & Rescue/miss & Seed-hit \(\Delta\)F1 \\
+\midrule
+Random non-gold & 0.2667 & 0.3333 & 0.5455 & 0.0000 \\
+Lexical & 0.3333 & 0.2889 & 0.6364 & 0.0625 \\
+Qwen3-8B & 0.2889 & 0.3556 & 0.5909 & 0.2119 \\
+RRF(Qwen3-8B+RepoMap) & 0.4222 & 0.3333 & 0.7273 & 0.1154 \\
+Oracle gold & 0.6444 & 0.1778 & 1.0000 & 0.3115 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The paired deltas in Table~\ref{tab:seed-intervention-paired} are deliberately more conservative than aggregate averages: seeded runs can worsen some samples. The result is therefore not that retrieval always improves an agent. Rather, under a fixed closed-tool policy, retrieval-derived seeds shift context acquisition toward higher File F1 and earlier gold contact with less post-seed exploration than a random non-gold seed, while oracle context gives an upper bound on remaining localization headroom.
+
+Finally, we run a lightweight proxy-validity check for the context-acquisition efficiency (CAE) metrics. This check asks whether the new diagnostics align with observed agent-side quantities, not whether they causally prove downstream patch success. Table~\ref{tab:cae-validity} summarizes two pieces of evidence. First, in a separate 40-sample seeded intervention used for PES calibration, PES@20 correlates with actual first-gold-step reduction and event savings. Second, in observational joins, the strongest hybrid retriever's BCY@8k is positively associated with agent gold-touch and final File F1. These correlations are weaker than the controlled seed-intervention result and vary by scaffold, which is expected because BCY measures the quality of the initial ranked context, while logged agents can still explore, miss, or recover files interactively.
+
+\begin{table}[t]
+\centering
+\caption{Positive-core proxy-validity checks for CAE metrics. PES rows use paired control/seeded Codex GPT-5.4 trajectories. BCY rows are observational joins for RRF(Qwen3-8B+RepoMap); \(\rho\) is Spearman rank correlation.}
+\label{tab:cae-validity}
+\begin{tabular}{llrr}
+\toprule
+Metric & Target quantity & n & \(\rho\) \\
+\midrule
+PES@20 & First-gold-step reduction & 16 & 0.674 \\
+PES@20 & Event savings & 40 & 0.529 \\
+BCY@8k / OpenAI strict & Any-gold touched & 287 & 0.230 \\
+BCY@8k / OpenAI strict & Final File F1 & 287 & 0.237 \\
+BCY@8k / Codex GPT-5.4 & Any-gold touched & 287 & 0.172 \\
+BCY@8k / Codex GPT-5.4 & Final File F1 & 287 & 0.129 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+A tertile sanity check shows the same direction for the hybrid retriever: moving from low to high BCY raises Codex GPT-5.4 any-gold from 0.600 to 0.792 and final File F1 from 0.268 to 0.370. These results support using CAE as a diagnostic proxy, not as a scalar causal estimate of downstream success.
+
+\subsection{Selective Retrieval with Abstention}
+
+The positive tasks ask retrievers to return useful files, but a deployed context engine must also decide when the repository contains no useful local context for the query. We therefore add a selective-retrieval evaluation with 82 evidence-backed no-gold samples. The balanced split pairs 82 positives with these 82 no-gold samples; the natural split keeps all 345 positives and adds the same 82 no-gold samples. We evaluate the path-aware lexical heuristic, BM25, and Jina code embeddings with a simple abstention rule: confidence is the top retrieval score, and the retriever abstains when it falls below a threshold. For each ranker, we choose the threshold that maximizes balanced accuracy on the balanced split, freeze it, and apply it unchanged to the natural split. This protocol tests whether a score threshold transfers under a larger positive pool and a natural 80.8\% positive prevalence, instead of re-optimizing on the evaluation distribution. The full run uses the 308-snapshot combined V2 corpus manifest, selects the 271 repo/base pairs referenced by the samples, and evaluates all 164 balanced and 427 natural samples without skips.
+
+\begin{table*}[t]
+\centering
+\caption{Selective retrieval with thresholds calibrated on the balanced split. ``Calibrated'' rows use the balanced-split threshold unchanged on the natural split. Selective success@20 counts a no-gold abstention as success and an accepted positive as success only when any gold file appears in the top 20.}
+\label{tab:selective-abstention}
+\scriptsize
+\begin{tabular}{lllrrrrrr}
+\toprule
+Split & Ranker & Point & Threshold & Pos. pass & No-gold abs. & Bal. acc & Succ.@20 & Coverage \\
+\midrule
+Balanced & lexical & no abstain & \(-\infty\) & 1.000 & 0.000 & 0.500 & 0.256 & 1.000 \\
+Balanced & lexical & calibrated & 16.54 & 0.829 & 0.598 & 0.713 & 0.506 & 0.616 \\
+Balanced & Jina-0.5B & no abstain & \(-\infty\) & 1.000 & 0.000 & 0.500 & 0.293 & 1.000 \\
+Balanced & Jina-0.5B & calibrated & 0.597 & 0.756 & 0.634 & 0.695 & 0.567 & 0.561 \\
+Balanced & BM25 & no abstain & \(-\infty\) & 1.000 & 0.000 & 0.500 & 0.244 & 1.000 \\
+Balanced & BM25 & calibrated & 699.93 & 0.268 & 0.976 & 0.622 & 0.561 & 0.146 \\
+\midrule
+Natural & lexical & no abstain & \(-\infty\) & 1.000 & 0.000 & 0.500 & 0.461 & 1.000 \\
+Natural & lexical & calibrated & 16.54 & 0.814 & 0.598 & 0.706 & 0.496 & 0.735 \\
+Natural & Jina-0.5B & no abstain & \(-\infty\) & 1.000 & 0.000 & 0.500 & 0.452 & 1.000 \\
+Natural & Jina-0.5B & calibrated & 0.597 & 0.704 & 0.634 & 0.669 & 0.478 & 0.639 \\
+Natural & BM25 & no abstain & \(-\infty\) & 1.000 & 0.000 & 0.500 & 0.429 & 1.000 \\
+Natural & BM25 & calibrated & 699.93 & 0.214 & 0.976 & 0.595 & 0.290 & 0.178 \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+Table~\ref{tab:selective-abstention} separates retrieval quality from confidence calibration. Without abstention, balanced accuracy is 0.5 because every no-gold query returns files. The frozen lexical threshold transfers best: on the natural split it reaches 0.706 balanced accuracy and raises selective success@20 from 0.461 to 0.496. Jina also transfers, reaching 0.669 balanced accuracy and improving selective success@20 from 0.452 to 0.478. Its retained positive queries have a 0.626 top-20 hit rate, compared with 0.559 before abstention, so its score filters some low-quality positive retrievals as well as no-gold queries. BM25 exposes the opposite failure mode. Its threshold rejects 0.976 of no-gold samples but passes only 0.214 of positives, reducing natural-split selective success@20 from 0.429 to 0.290. Thus balanced label discrimination alone is not sufficient: a useful selective retriever must preserve positive retrieval utility. Pure no-gold runs remain diagnostics only, since any ranker can achieve perfect no-gold accuracy by abstaining on every sample. Because the balanced split is drawn from the natural positive pool and reuses the same 82 no-gold samples, this is a prevalence-transfer diagnostic rather than a fully independent held-out calibration study.
+
+The positive-only \code{edit2ripple} expansion is evaluated with the standard retrieval protocol rather than abstention. Table~\ref{tab:edit2ripple} reports 58 audited samples and recomputes every budget point with the canonical file-level BCY protocol. Qwen3-Embedding-4B has the best broad file coverage (Recall@20 0.7112), while pplx-embed-v1-4b has the best MRR and the best yield at 4k. The budget winner changes as context grows: Qwen3-Embedding-8B leads at 8k, pplx and Qwen3-Embedding-4B tie at 16k, and Qwen3-Embedding-4B leads at 32k. Thus ranking the first relevant file, covering the full useful file set, and packing useful files into a bounded context are separable qualities.
+
+\begin{table*}[t]
+\centering
+\caption{\code{edit2ripple} retrieval results on 58 audited samples. BCY uses the canonical token-based file-packing protocol at each budget and the stored top-20 file rankings.}
+\label{tab:edit2ripple}
+\scriptsize
+\setlength{\tabcolsep}{5.8pt}
+\begin{tabular}{llrrrrrrr}
+\toprule
+Model & Family & R@5 & R@20 & MRR & BCY@4k & BCY@8k & BCY@16k & BCY@32k \\
+\midrule
+Qwen3-Embedding-4B & embedding & 0.4813 & \textbf{0.7112} & 0.2791 & 0.3707 & 0.5043 & \textbf{0.6078} & \textbf{0.7112} \\
+Qwen3-Embedding-8B & embedding & \textbf{0.4914} & 0.6825 & 0.2652 & 0.3333 & \textbf{0.5129} & 0.5963 & 0.6767 \\
+pplx-embed-v1-4b & embedding & 0.4670 & 0.6782 & \textbf{0.2877} & \textbf{0.3865} & 0.4842 & \textbf{0.6078} & 0.6652 \\
+jina-code-embeddings-0.5b & embedding & 0.3678 & 0.6466 & 0.2414 & 0.2773 & 0.3851 & 0.4928 & 0.6408 \\
+nomic-embed-code & embedding & 0.3807 & 0.5733 & 0.2860 & 0.2917 & 0.3980 & 0.5244 & 0.5690 \\
+\midrule
+lexical & lexical & 0.4124 & 0.5876 & 0.2428 & 0.3218 & 0.4468 & 0.5187 & 0.5876 \\
+RepoMap & structure & 0.3635 & 0.6164 & 0.2344 & 0.2040 & 0.3592 & 0.5187 & 0.5848 \\
+BM25 & lexical & 0.2069 & 0.4986 & 0.1536 & 0.1221 & 0.2428 & 0.3103 & 0.4641 \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+The table also shows why \code{edit2ripple} is not just an easier lexical variant. Lexical matching is competitive with RepoMap by MRR and BCY, but neither dominates the embedding models on Recall@20. RepoMap improves over BM25 and helps identify ripple-effect files through repository structure, yet remains behind the strongest embedding models under every budget. The changing winner across 4k--32k is the key result: a single BCY point would hide that pplx prioritizes useful files under the tightest context, while the Qwen models recover more gold files as additional context becomes available.
+
+\subsection{\code{trace2code} Reverses the Aggregate Picture}
+
+\code{trace2code} is the strongest evidence that semantic embeddings alone are insufficient. RepoMap leads this task by MRR and Recall@20. Lexical retrieval is also stronger than most embedding baselines on MRR. Qwen3-Embedding-4B, despite leading overall MRR, has weak \code{trace2code} MRR (0.0827).
+
+\begin{table}[t]
+\centering
+\caption{\code{trace2code} task-level results.}
+\label{tab:trace2code}
+\begin{tabular}{lrrrr}
+\toprule
+Model & R@5 & R@10 & R@20 & MRR \\
+\midrule
+aider-style-repomap & 0.4488 & 0.7195 & 0.8366 & 0.2742 \\
+lexical & 0.3432 & 0.4818 & 0.6964 & 0.2075 \\
+Qwen3-Embedding-8B & 0.2442 & 0.5281 & 0.7970 & 0.1654 \\
+BM25 & 0.2228 & 0.3218 & 0.4934 & 0.1638 \\
+pplx-embed-v1-4b & 0.1601 & 0.2855 & 0.5380 & 0.1372 \\
+nomic-embed-code & 0.1584 & 0.1733 & 0.3581 & 0.0871 \\
+Qwen3-Embedding-4B & 0.0743 & 0.1815 & 0.5050 & 0.0827 \\
+jina-code-embeddings-0.5b & 0.0693 & 0.1188 & 0.2607 & 0.0607 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Failure traces often expose tests and local symbols, not the implementation file that should change. Structure-aware ranking can connect these visible signals to nearby source files.
+
+\section{Rank and Error Analysis}
+
+Aggregate MRR measures early precision, but it does not fully describe whether a model can keep a gold file within a later reranking or context-selection depth. First-gold depth analysis shows this tradeoff.
+
+\begin{table*}[t]
+\centering
+\caption{First-gold rank depth. Any@k is the fraction of samples where at least one gold file appears in the top k.}
+\label{tab:first-gold-depth}
+\begin{tabular}{lrrrrr}
+\toprule
+Model & Any@5 & Any@20 & Med. Rank & Trace Any@20 & Trace Med. \\
+\midrule
+Qwen3-4B & 0.3589 & 0.6864 & 11 & 0.5347 & 20 \\
+Qwen3-8B & 0.4077 & 0.7944 & 7 & 0.8614 & 9 \\
+pplx-4B & 0.3310 & 0.6794 & 10 & 0.5941 & 18 \\
+RepoMap & 0.3659 & 0.7178 & 9 & 0.9010 & 6 \\
+Jina-0.5B & 0.2683 & 0.5226 & 19 & 0.2871 & 29 \\
+Nomic & 0.3101 & 0.5784 & 15 & 0.3861 & 25 \\
+Lexical & 0.2474 & 0.5470 & 17 & 0.7525 & 8 \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+Qwen3-Embedding-4B has the highest overall MRR, but Qwen3-Embedding-8B has broader top-20 coverage (0.7944 vs. 0.6864). This suggests that the 4B model places its successful hits earlier, while the 8B model retrieves at least one gold file for more samples by depth 20.
+
+Only 22 of the 287 positive-core samples are missed by every reported baseline at top 20. This supports the interpretation that \arb{} exposes complementary retrieval behavior, not just uniformly impossible examples.
+
+\subsection{\code{trace2code} Error Patterns}
+
+Representative \code{trace2code} examples show both structure wins and embedding wins. In two Gin samples whose gold files are \code{response\_writer.go} and \code{errors.go}, RepoMap retrieves the gold source file in the top 20 while Qwen3-Embedding-4B and Qwen3-Embedding-8B miss it. The failure excerpts mention tests and compile failures, so semantic models often rank visible test files or generic repository metadata above the implementation file. RepoMap can use structural proximity between tests and source files to recover the root-cause file.
+
+The reverse also occurs. In a Caddy authentication failure, pplx-embed-v1-4b ranks the gold \code{caddyauth.go} file first while RepoMap misses it at depth 20. These examples prevent a simplistic ``RepoMap beats embeddings'' conclusion. The stronger conclusion is that semantic and structural signals are complementary.
+
+\subsection{\code{comment2context} Error Patterns}
+
+\code{comment2context} exposes the given-file trap. The reviewed file is already available to the agent, so returning it is not sufficient. In a Hypothesis seed-printing sample, the query points at the reviewed test while the gold context is in \code{core.py} and the conjecture engine. RepoMap ranks the given test file first and misses the gold files at depth 20.
+
+\subsection{\code{code2test} Error Patterns}
+
+\code{code2test} failures often require mapping implementation changes to project-specific test organization. An etcd sample includes nine implementation files and two existing test files in the query summary, but all seven baselines miss the gold e2e control-plane tests and cluster framework file at depth 20. These examples show that source-to-test retrieval is not only semantic similarity.
+
+\section{Candidate Filter Ablation}
+
+The official leaderboard uses \code{candidate\_filter=all\_files}. We also run a diagnostic candidate-filter ablation for vectorless baselines. Restricting candidates to \code{tests\_only} sharply improves \code{code2test}, but it collapses \code{trace2code} to zero because source-file golds are removed. Conversely, \code{code\_only} improves vectorless overall MRR, especially by reducing distracting non-source candidates. These results are useful diagnostically, but they should not replace the official \code{all\_files} leaderboard.
+
+\section{Reproducibility}
+
+The V2 release includes per-subset benchmark JSONL files, corpus chunks and manifests, eval summaries and per-sample details, model leaderboards, readiness and release reports, candidate-filter, rank-analysis, dataset-validity reports, checksums, and downloadable release bundles.
+
+The CLI supports downloading the benchmark release, running lexical, RepoMap, and embedding baselines, generating model leaderboards, generating rank/error analysis reports, and generating dataset-validity, context-cost, and rank-fusion diagnostics. The main diagnostic reports can be reproduced with:
+\begin{verbatim}
+python -m agent_retrieval_bench.cli report-dataset-validity
+python -m agent_retrieval_bench.cli report-agentic-relevance
+python -m agent_retrieval_bench.cli report-bcy-curve
+python -m agent_retrieval_bench.cli report-context-cost
+python -m agent_retrieval_bench.cli report-pes-calibration
+python -m agent_retrieval_bench.cli report-cae-validity
+python -m agent_retrieval_bench.cli report-rank-fusion
+\end{verbatim}
+These commands emit the validity reports under \path{data/reports/v1_4/dataset_validity}, the relevance taxonomy report under \path{data/reports/v1_4/agentic_relevance}, the BCY curve under \path{data/reports/v1_4/bcy_budget_curve.*}, the context-acquisition cost report under \path{data/reports/v1_4/context_acquisition_cost.*}, the CAE proxy-validity report under \path{data/reports/v1_4/cae_validity_correlation.*}, and the rank-fusion report under \path{data/reports/v1_4/rank_fusion_report.*}. The closed-tool seed-intervention tables are generated from saved arm details by \code{report-closed-tool-seed-intervention}; the report used here is stored at \path{data/reports/v1_4/context_intervention_pilot45/seed_intervention_report_with_controls.*}.
+
+The selective abstention results in Table~\ref{tab:selective-abstention} use the combined corpus manifest at \path{data/corpus/v2_selective_mixed/corpus_manifest.jsonl}, which merges the five V2 subset corpora. The manifest contains 308 reusable repo/base snapshots, of which the natural split requires 271. Lexical and BM25 results are reproduced with \code{eval-selective-baseline}; their H20 summaries and details are stored under \path{data/eval/v2_selective/*_all_files_selective_*}. Jina is reproduced with \code{eval-selective-embedding} and its artifacts are stored under \path{data/eval/v2_selective_retrieval_balanced} and \path{data/eval/v2_selective_retrieval_natural}. For every ranker, the reported natural calibrated row is computed by applying the balanced summary's \code{best\_balanced\_accuracy} threshold to the natural details with \code{threshold\_metrics}; no threshold is selected on the natural split. The \code{edit2ripple} lexical, BM25, and RepoMap rows are reproduced with \code{eval-baseline} or \code{eval-repomap} on the self-contained \code{v2\_edit2ripple} release; the embedding rows are reproduced with \code{eval-embedding --version v2\_edit2ripple} using the listed local model checkpoints. Per-sample rankings and summaries are stored under \path{data/eval/v2\_edit2ripple}; applying the canonical BCY reporter to those details produces \path{edit2ripple\_bcy\_curves.*}. The legacy evaluator fields \code{gold\_coverage@8k} and \code{context\_efficiency@8k} use character-counted chunk packing and are not used as BCY results in Table~\ref{tab:edit2ripple}.
+
+Runtime remains an important practical issue. The corpus contains millions of chunks, and embedding evaluation is expensive. The release includes shared text cache support and details-resume support to make evaluation recoverable. We treat runtime as a reproducibility field rather than a primary quality metric because wall-clock performance depends on hardware, batch size, query batch size, cache state, and embedding backend.
+
+\section{Limitations}
+
+The current release is diagnostic, not web-scale. It contains 427 samples: 345 positive retrieval examples and 82 no-gold examples. This is enough to expose strong task-level differences and selective-retrieval failure modes, but it is not a large statistical benchmark covering all languages and ecosystems.
+
+\arb{} is file-level. It does not evaluate span-level retrieval, exact edit localization, or patch generation. This is a deliberate isolation of the retrieval stage, but it means the benchmark does not measure end-to-end agent success.
+
+The corpus is fixed at the base commit. The main static-retrieval leaderboard does not evaluate dynamic tool use, iterative retrieval, or agent-driven exploration over multiple turns; the logged trajectory analysis is reported separately as a context-selection and cost comparison. Appendix~\ref{app:closed-tool} reports an additional closed-tool diagnostic in which Codex can access repository content only through evaluator-mediated \code{list\_dir}, \code{grep}, and \code{read\_file} actions. We keep the deterministic scripted-grep policy out of the main leaderboard because it is a harness sanity check rather than a realistic agent baseline. The trajectory cost numbers and seed-intervention results measure context acquisition, not a full causal attribution of downstream patch failures.
+
+Gold labels approximate files that need to be read. They are reviewed and evidence-backed, but they are not full human reasoning traces. Some tasks may have alternative useful files that are not labeled as gold.
+
+\section{Future Work}
+
+The most direct technical next step is hybrid retrieval. The reviewed results show that embeddings, lexical matching, and RepoMap have complementary strengths. A future system should combine semantic vectors, lexical/path signals, repository graphs, source-test relations, and task-aware reranking.
+
+Another direction is a larger reviewed release with more languages, repositories, and workflow signals. Potential new tasks include issue-to-code retrieval, bug-report-to-root-cause retrieval, migration-to-affected-files retrieval, and API-usage-to-implementation retrieval.
+
+A complementary direction is query rewriting. The current benchmark preserves workflow-derived signals such as PR summaries, review comments, and failure excerpts. Future releases could add paired developer-facing rewrites of the same samples, allowing evaluation of whether retrievers are robust to phrasing and whether normalized coding-assistant queries change the relative value of semantic, lexical, and structural signals.
+
+Finally, \arb{} should be integrated into end-to-end agent loops. The current benchmark isolates retrieval. A downstream study could test whether better \arb{} retrieval improves patch success, reduces search turns, or lowers token cost when plugged into a coding agent. A complementary failure-attribution study over failed SWE-bench trajectories could measure how often agents never read the files later judged necessary.
+
+\section{Conclusion}
+
+\arb{} evaluates an upstream failure mode in coding agents: finding the repository files needed before patch generation begins, including deciding when no repository file should be returned. V2 shows that agentic retrieval is not solved by a single retrieval family. Strong embeddings lead aggregate positive-core MRR and perform well on \code{code2test} and \code{comment2context}, vectorless structure-aware retrieval is strongest on \code{trace2code}, and the \code{edit2ripple} winner changes with the context budget. A simple RRF hybrid improves over the best single run on positive-core MRR and Recall@20, while selective retrieval, rank-depth, context-budget, trajectory analyses, and a closed-tool seed intervention show that top-k recall alone does not guarantee usable context.
+
+The practical implication is clear: coding-agent retrieval should be hybrid and task-aware. Semantic similarity, lexical/path matching, repository structure, and source-test relations each solve different parts of the benchmark. \arb{} provides a controlled way to measure those differences before they are hidden inside end-to-end patch generation.
+
+\appendix
+
+\section{Closed-Tool Context Acquisition Diagnostic}
+\label{app:closed-tool}
+
+The main leaderboard evaluates static file ranking. To test whether \arb{} can also support an agent-native context-acquisition protocol, we ran a closed-tool diagnostic in which the policy must iteratively request repository information. The evaluated policy is isolated from the corpus filesystem: Codex runs inside a Docker container whose workspace contains only the current prompt, action schema, and prior observations. The benchmark corpus is not mounted into the container. At each turn, Codex returns a structured JSON action from \code{list\_dir}, \code{grep}, \code{read\_file}, and \code{submit}; the evaluator executes the action outside the container and returns only the resulting observation. We audit Codex JSON events for shell or unsupported tool use and count such events as protocol violations.
+
+Table~\ref{tab:closed-tool-overall} reports the full inherited positive-core diagnostic. The deterministic scripted-grep row is included only as a harness sanity check: it uses the same evaluator-mediated tools and budgets, but replaces model-based action selection with fixed lexical heuristics. It is not intended to represent a realistic agent. Its role is to show that access to \code{grep} and \code{read\_file} alone does not make the benchmark trivial. The Docker-isolated Codex row is the agentic policy result.
+
+\begin{table}[h]
+\centering
+\caption{Closed-tool context-acquisition diagnostic on the 287 inherited positive-core samples. Both rows use evaluator-mediated repository access; the scripted-grep row is a deterministic sanity check, not a main agent baseline.}
+\label{tab:closed-tool-overall}
+\small
+\begin{tabular}{lrrrrrrr}
+\toprule
+Policy & n & Final F1 & Final R & Final P & Any-gold & Calls & Viol. \\
+\midrule
+scripted grep & 287 & 0.0719 & 0.1144 & 0.0557 & 0.2683 & 15.79 & 0 \\
+Codex closed-tool & 287 & 0.3279 & 0.4692 & 0.2712 & 0.5470 & 3.82 & 0 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Table~\ref{tab:closed-tool-task} breaks down the Docker-isolated Codex row by task. The result is diagnostic rather than a replacement for the static leaderboard. It shows that a controlled interactive policy can recover substantially more context on \code{trace2code}, where failure output provides strong localization clues, while \code{comment2context} remains difficult even with adaptive tool use.
+
+\begin{table}[h]
+\centering
+\caption{Docker-isolated Codex closed-tool results by inherited positive-core task.}
+\label{tab:closed-tool-task}
+\small
+\begin{tabular}{lrrrrrr}
+\toprule
+Task & n & Final F1 & Final R & Final P & Any-gold & Read toks \\
+\midrule
+\code{code2test} & 106 & 0.2387 & 0.3601 & 0.1887 & 0.4151 & 2391.3 \\
+\code{comment2context} & 80 & 0.1325 & 0.1583 & 0.1292 & 0.2625 & 2026.2 \\
+\code{trace2code} & 101 & 0.5762 & 0.8300 & 0.4703 & 0.9109 & 2477.6 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+We also report a post-hoc tool-budget prefix diagnostic in Table~\ref{tab:closed-tool-budget}. For each completed Codex trajectory, we score the files read within the first \(B\) evaluator-mediated tool calls as the acquired context. This is not a counterfactual rerun under a smaller budget; it measures how quickly the recorded policy acquired useful files. The main gain occurs between two and four tool calls, after which the prefix score saturates because most runs have already submitted or exhausted useful reads.
+
+\begin{table}[h]
+\centering
+\caption{Post-hoc budget prefix diagnostic for Docker-isolated Codex positive-core trajectories. Prefix File F1 scores files read within the first \(B\) tool calls.}
+\label{tab:closed-tool-budget}
+\small
+\begin{tabular}{rrrrrrr}
+\toprule
+Budget & n & Prefix F1 & Prefix R & Prefix P & Any-gold & Read toks \\
+\midrule
+2 & 287 & 0.1863 & 0.2340 & 0.1707 & 0.2578 & 1409.0 \\
+4 & 287 & 0.3276 & 0.4692 & 0.2709 & 0.5470 & 2319.9 \\
+6 & 287 & 0.3276 & 0.4692 & 0.2709 & 0.5470 & 2319.9 \\
+8 & 287 & 0.3276 & 0.4692 & 0.2709 & 0.5470 & 2319.9 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+This diagnostic supports two limited claims. First, \arb{} can evaluate more than single-shot static ranking: the same gold files and trajectory metrics can score an evaluator-mediated interactive retrieval policy. Second, the large task spread confirms that closed-tool context acquisition is not homogeneous. The diagnostic does not claim that deterministic grep is a meaningful agent baseline, nor that the closed-tool protocol captures the full behavior of production coding agents with editing, testing, and long-lived memory.
+
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\end{document}

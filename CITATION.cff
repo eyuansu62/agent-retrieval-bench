@@ -1,0 +1,27 @@
+cff-version: 1.2.0
+title: Agent Retrieval Bench
+message: "If you use Agent Retrieval Bench, please cite the benchmark and dataset."
+type: dataset
+authors:
+  - family-names: Qin
+    given-names: Bowen
+    affiliation: National University of Singapore
+  - family-names: Xie
+    given-names: Yi
+    affiliation: Peking University
+url: https://github.com/eyuansu62/agent-retrieval-bench
+repository-code: https://github.com/eyuansu62/agent-retrieval-bench
+repository-artifact: https://huggingface.co/datasets/eyuansu71/agent_retrieval_bench
+date-released: "2026-06-09"
+abstract: >-
+  Agent Retrieval Bench evaluates repository context retrieval for coding
+  agents across code2test, comment2context, trace2code, edit2ripple, and
+  selective no-gold retrieval. It contains 427 workflow-derived samples
+  evaluated against frozen base-commit corpora.
+keywords:
+  - code retrieval
+  - coding agents
+  - software engineering
+  - retrieval benchmark
+  - agentic retrieval
+license: MIT

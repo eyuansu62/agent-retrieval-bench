@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agent-retrieval-bench"
+version = "0.2.1"
+description = "Evaluation toolkit for repository context retrieval in coding-agent workflows."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+embedding = [
+    "numpy>=1.26",
+    "sentence-transformers>=3.0.0",
+]
+
+[project.urls]
+Homepage = "https://agent-retrieval-bench.github.io/"
+Repository = "https://github.com/eyuansu62/agent-retrieval-bench"
+Dataset = "https://huggingface.co/datasets/eyuansu71/agent_retrieval_bench"
+
+[project.scripts]
+arb = "agent_retrieval_bench.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

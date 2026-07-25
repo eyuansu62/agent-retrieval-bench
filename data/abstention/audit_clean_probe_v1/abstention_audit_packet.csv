@@ -1,0 +1,2642 @@
+id,repo,base_commit,query_source,query_text,proposed_no_gold_reason,source_url,resolution_comments,rerun_status,linked_commits,why_no_local_fix,evidence_snippets,source_sample_id,source_repo,source_task_type,pairing_profile,verdict,notes,has_local_gold_files,evidence_summary
+abstention_candidate__organic_issue__3ed945493c9731a4eb3ee384,pytest-dev/pytest,bf92debb4fd874289f6aed29c6947b611b1de0ae,issue,"Issue title: Memory leak when running `pytest` on macOS
+Issue body excerpt: ## Description
+
+Running pytest on macOS (both for the Pytest library itself as well as a few other libraries) leaks a small amount of memory.
+
+## Steps to reproduce
+```bash
+> git clone https://github.com/pytest-dev/pytest.git
+> pip install .
+> sudo leaks --atExit -- python -m pytest | grep bytes
+
+Process 95884: 3 leaks for 4656 total leaked bytes.
+    1 (560 bytes) ROOT LEAK: <malloc in _PyObject_Malloc 0x105d5ad10> [560]
+```
+
+When running pytest on other projects, I get a leak of a different size and a different source: but it only occurs when running pytest. Importing the package and calling functions from it does not leak any memory.
+
+```bash
+> sudo leaks --atExit -- python -m pytest <my_libraries> | grep bytes
+   1 (16 bytes) ROOT LEAK: <non-object from libedit.3.dylib 0x127092d20> [16]
+```
+
+
+## pip list
+``` bash
+> pip list
+Package            Version
+------------------ ----------------------
+argcomplete        3.6.2
+attrs              25.3.0
+certifi            2025.8.3
+charset-normalizer 3.4.2
+elementpath        5.0.3
+hypothesis         6.137.1
+idna               3.10
+iniconfig          2.1.0
+mock               5.2.0
+packaging          25.0
+pip                25.2
+pluggy             1.6.0
+Pygments           2.19.2
+pytest             8.5.0.dev66+g5989efe3e
+requests           2.32.4
+setuptools         80.9.0
+sortedcontainers   2.4.0
+urllib3            2.5.0
+xmlschema          4.1.0
+```
+
+I reproduced this behavior in a `uv` environment, and in a `micromamba` environment where I installed pip.
+
+```bash
+> pytest --version
+pytest 8.4.1 # Built from source
+> python --version
+Python 3.15.5
+```",upstream_dependency,https://github.com/pytest-dev/pytest/issues/13636,"[""Based on the details this is a upstream bug with apples libedit version \n\nClosing as not planned since pytest can't act on this atm""]",,[],Maintainer resolution evidence classifies the issue as no repository-local fix; automatic checks found no issue closing commit event.,"[""Maintainer comment by RonnyPfannschmidt classified as upstream_dependency."", ""Based on the details this is a upstream bug with apples libedit version \n\nClosing as not planned since pytest can't act on this atm""]",,,,,valid_no_gold,Maintainer attributes macOS memory leak to Apple libedit and says pytest cannot act on it.,,
+abstention_candidate__organic_issue__47097e7d8f29ad1aa2e839b5,pytest-dev/pytest,a0e3a49f194175bec96a551791b2b02b23e06a09,issue,"Issue title: SystemError occured in Windows Python 3.13.0
+Issue body excerpt: I encountered the following error when using Pytest 8.3.3 in Windows Python 3.13.0 in GitHub Actions:
+
+```
+> Run poetry run pytest --cov-append --cov-report=xml --junitxml=junit.xml
+Exception ignored on threading shutdown:
+Traceback (most recent call last):
+  File ""C:\hostedtoolcache\windows\Python\3.13.0\x64\Lib\threading.py"", line 1524, in _shutdown
+    if _main_thread._handle.is_done() and _is_main_interpreter():
+SystemError: <method 'is_done' of '_thread._ThreadHandle' objects> returned a result with an exception set
+Error: Process completed with exit code 1.
+```
+
+I saw a similar issue in the cpython repository: https://github.com/python/cpython/issues/125842. I wonder if this is just a bug with Python 3.13.0 and not pytest's.",upstream_dependency,https://github.com/pytest-dev/pytest/issues/13024,"[""Closing this as resolved upstream.\n\n@lkstrp, if you can open a new issue with a minimal reproducing example for us to confirm the bug that'd be great 🙏""]",,[],Maintainer resolution evidence classifies the issue as no repository-local fix; automatic checks found no issue closing commit event.,"[""Maintainer comment by Zac-HD classified as upstream_dependency."", ""Closing this as resolved upstream.\n\n@lkstrp, if you can open a new issue with a minimal reproducing example for us to confirm the bug that'd be great 🙏""]",,,,,valid_no_gold,Maintainer closes as resolved upstream in Python/Windows threading and requests a new minimal repro only if needed.,,
+abstention_candidate__organic_issue__2287e848e7d5b393d190fe6a,pypa/pip,bca2f4ed594ce881fb0cab6117fa05b7ef13b558,issue,"Issue title: Package download interrupted then pip reports invalid md5 hash
+Issue body excerpt: * Pip version: 9.0.1
+* Python version: tried on 2.7 and 3.5
+* Operating system: Linux
+* Devpi-server: 4.3.0
+
+### Description:
+
+I am running devpi-server as cache of public packages, because I have slow internet connection. Which works fine except for `pandas` package which is unusually big `20M-24M`. When server cache is empty (download is slow) the **download is interrupted** at about 85%-95%. But then **pip does not report timeout error**, but instead computes hash of downloaded part and reports md5 hash mismatch.
+I am not sure if this is caused by pip timeout or some bug in devpi.
+
+### What I've run:
+
+When server cache is cold, I can reproduce the error by running pip install or download.
+Notice that it gets interrupted at different moment in time:
+```
+pip3 download pandas==0.20.3
+Collecting pandas==0.20.3
+  Downloading http://devpi.ai-traders.com/root/pypi/+f/a0f/df9f6d772ed81/pandas-0.20.3-cp35-cp35m-manylinux1_x86_64.whl (24.0MB)
+    89% |############################    | 21.5MB 43.7MB/s eta 0:00:01
+THESE PACKAGES DO NOT MATCH THE HASHES FROM THE REQUIREMENTS FILE. If you have updated the package versions, please update the hashes. Otherwise, examine the package contents carefully; someone may have tampered with them.
+    pandas==0.20.3 from http://devpi.ai-traders.com/root/pypi/+f/a0f/df9f6d772ed81/pandas-0.20.3-cp35-cp35m-manylinux1_x86_64.whl#md5=a0fdf9f6d772ed8168ec6ce555ac7aba:
+        Expected md5 a0fdf9f6d772ed8168ec6ce555ac7aba
+             Got        d01f88a8b5728ce6cc6648762056c379
+```
+
+```
+pip download pandas==0.20.3
+Collecting pandas==0.20.3
+  Downloading http://devpi.ai-traders.com/root/pypi/+f/a0f/df9f6d772ed81/pandas-0.20.3-cp35-cp35m-manylinux1_x86_64.whl (24.0MB)
+    92% |#############################   | 22.2MB 26.4MB/s eta 0:00:01
+THESE PACKAGES
+...[truncated]",upstream_dependency,https://github.com/pypa/pip/issues/4930,"[""I think this is proper-ish behaviour. It seems that the network link/server is not very reliable and, when pip is unable to properly download the files, for whatever reason, that's being caught by the hash check and installation/download aborted.\n\nCould you try and see if you able to reproduce the same timeout + not-matching-hash behaviour with a simple requests-based script to download the same file? If so, I think this'll be an upstream issue.""]",,[],Maintainer resolution evidence classifies the issue as no repository-local fix; automatic checks found no issue closing commit event.,"[""Maintainer comment by pradyunsg classified as upstream_dependency."", ""I think this is proper-ish behaviour. It seems that the network link/server is not very reliable and, when pip is unable to properly download the files, for whatever reason, that's being caught by the hash check and installation/download aborted.\n\nCould you try and see if you able to reproduce the same timeout + not-matching-hash behaviour with a simple requests-based script to download the same file? If so, I think this'll be an upstream issue.""]",,,,,valid_no_gold,Maintainer frames the interrupted download as unreliable network/server behavior caught by hash checking; no pip repo fix is indicated.,,
+abstention_candidate__organic_issue__0eed426863fd0dbb531755fa,pytest-dev/pytest,c9d8765381d71197fc981a9636828aea5063dc7f,issue,"Issue title: pytest 8.2.0 regresses collection and now collects non-Test* classes
+Issue body excerpt: Discovered while testing [libcloud](https://github.com/apache/libcloud) with pytest 8.2.0, as seen in https://github.com/apache/libcloud/blob/trunk/libcloud/test/__init__.py#L90 the MockHttp class is also collected and attempted to be instantiated, leading to collection errors like the following:
+
+```
+[   20s] ___________ ERROR collecting libcloud/test/common/test_cloudstack.py ___________
+[   20s] libcloud/test/__init__.py:111: in __init__
+[   20s]     super().__init__(*args, **kwargs)
+[   20s] E   TypeError: LibcloudConnection.__init__() missing 1 required positional argument: 'port'
+[   20s] _______ ERROR collecting libcloud/test/common/test_openstack_identity.py _______
+[   20s] libcloud/test/__init__.py:111: in __init__
+[   20s]     super().__init__(*args, **kwargs)
+[   20s] E   TypeError: LibcloudConnection.__init__() missing 1 required positional argument: 'port'
+[   20s] _______ ERROR collecting libcloud/test/common/test_openstack_identity.py _______
+[   20s] libcloud/test/compute/test_openstack.py:3841: in __init__
+[   20s]     super().__init__(*args, **kwargs)
+[   20s] libcloud/test/__init__.py:111: in __init__
+[   20s]     super().__init__(*args, **kwargs)
+[   20s] E   TypeError: LibcloudConnection.__init__() missing 1 required positional argument: 'port'
+```
+
+I bisected this down to first occurring with https://github.com/pytest-dev/pytest/commit/1a5e0eb71d2af0ad113ccd9ee596c7d724d7a4b6 (sixth commit or so of 8.2.0)
+
+pip list output:
+
+```
+Package            Version
+------------------ ----------
+apipkg             3.0.2
+attrs              23.2.0
+bcrypt             4.1.3
+certifi            2023.11.17
+cffi               1.16.0
+charset-normalizer 3.3.2
+cryptography       42.0.7
+fasteners          0.19
+idna               3.7
+iniconfig          2.0.0
+libvirt-pytho
+...[truncated]",upstream_dependency,https://github.com/pytest-dev/pytest/issues/12425,"[""https://github.com/apache/libcloud/blob/6f1f83d57fb6bbf7d932ea2c4e312ba5fd86fb81/libcloud/test/common/test_cloudstack.py#L119 is fundamentally broken, it was pure dumb luck it ever worked\n\nimho its a upstream bug that was accidentially hidden, not something to support \n\nbased on the inheritance tree, yout bugfix hides large parts of the testsuite""]",,[],Maintainer resolution evidence classifies the issue as no repository-local fix; automatic checks found no issue closing commit event.,"[""Maintainer comment by RonnyPfannschmidt classified as upstream_dependency."", ""https://github.com/apache/libcloud/blob/6f1f83d57fb6bbf7d932ea2c4e312ba5fd86fb81/libcloud/test/common/test_cloudstack.py#L119 is fundamentally broken, it was pure dumb luck it ever worked\n\nimho its a upstream bug that was accidentially hidden, not something to support \n\nbased on the inheritance tree, yout bugfix hides large parts of the testsuite""]",,,,,valid_no_gold,Maintainer identifies the libcloud test class hierarchy as the upstream bug hidden by prior pytest behavior; no pytest repo fix is indicated.,,
+abstention_candidate__organic_issue__cb453cb8b04c3f763b510228,pytest-dev/pytest,486a9ed057ee43a70d0a2e1c57bb3b8f925dc42c,issue,"Issue title: Add an exit code to differentiate full-passed tests from xpassed & xfailed tests executions
+Issue body excerpt: <!--
+Thanks for suggesting a feature!
+
+Quick check-list while suggesting features:
+-->
+
+#### What's the problem this feature will solve?
+<!-- What are you trying to do, that you are unable to achieve with pytest as it currently stands? -->
+In the case of no test failures, I would like to differentiate executions with 100% passed tests from those with at least one xpassed or xfailed test.
+
+#### Describe the solution you'd like
+<!-- A clear and concise description of what you want to happen. -->
+If the execution has
+`failed tests = 0 and (xfailed tests > 0 or xpassed tests > 0)`
+I want the test execution to return a different exit code (example: `ExitCode.TESTS_XFAILED = 6`)
+
+<!-- Provide examples of real-world use cases that this would enable and how it solves the problem described above. -->
+
+#### Alternative Solutions
+<!-- Have you tried to workaround the problem using a pytest plugin or other tools? Or a different approach to solving this issue? Please elaborate here. -->
+Implement `pytest_runtest_makereport` hook to detect xpassed and xfailed tests
+Implement `pytest_sessionfinish` hook to override exit status
+
+#### Additional context
+<!-- Add any other context, links, etc. about the feature here. -->
+Useful when executing pytest from a CI tool (like jenkins) and set job execution status to `unstable` if `failed tests = 0 and (xfailed tests > 0 or xpassed tests > 0)`",upstream_dependency,https://github.com/pytest-dev/pytest/issues/11463,"[""See https://github.com/pytest-dev/pytest/issues/7233#issuecomment-631613486 for some more background regarding `xfail_strict`.\n\nThe predominant usage of xfail is not dealing with flaky tests, but e.g. keeping a test around which is broken due to an upstream bug. The flaky tests usecase is a very exotic one (and indeed not the intended one) - there are better solutions for that, e.g. [pytest-rerunfailures](https://github.com/pytest-dev/pytest-rerunfailures).\n\nA change which breaks xfail for its intended purpose seems unacceptable to me - and given that I'm not the only core developer with that stance, taking the freedom to close this.""]",,[],Maintainer resolution evidence classifies the issue as no repository-local fix; automatic checks found no issue closing commit event.,"[""Maintainer comment by The-Compiler classified as upstream_dependency."", ""See https://github.com/pytest-dev/pytest/issues/7233#issuecomment-631613486 for some more background regarding `xfail_strict`.\n\nThe predominant usage of xfail is not dealing with flaky tests, but e.g. keeping a test around which is broken due to an upstream bug. The flaky tests usecase is a very exotic one (and indeed not the intended one) - there are better solutions for that, e.g. [pytest-rerunfailures](https://github.com/pytest-dev/pytest-rerunfailures).\n\nA change which breaks xfail for its intended purpose seems unacceptable to me - and given that I'm not the only core developer with that stance, taking the freedom to close this.""]",,,,,valid_no_gold,Maintainer rejects the exit-code feature because it breaks intended xfail semantics; no pytest repo change is needed.,,
+abstention_candidate__organic_issue__9c50de51f40378ca0171b0bd,pytest-dev/pytest,2f33ea87c8d303c3439655eb2bea24483bffde5e,issue,"Issue title: PyTest internal error when using ""except*"" on an unhashable exception
+Issue body excerpt: **Tl;dr:** A strange exception thrown by `except*` from ""line -1"" causes PyTest to crash when trying to retrieve the line it came from. Code to reproduce:
+
+```
+class MyException(Exception):
+    __hash__ = None
+
+
+def test_broken():
+    try:
+        raise ExceptionGroup(""Foo"", [
+            MyException(""Bar"")
+        ])
+    except* Exception:
+        pass
+```
+
+And then run that test function (`test_broken`) with pytest.
+
+Expected result: test succeeds.
+
+Expected result once you know about the weird behavior of `expect*` (see below): test fails with a `TypeError`.
+
+Actual result: pytest fails with the following traceback; test is marked as ""not run"".
+
+```
+Launching pytest with arguments test_broken.py::test_broken --no-header --no-summary -q in C:\Users\Josep\PycharmProjects\sloge\tests
+
+============================= test session starts =============================
+collecting ... collected 1 item
+
+test_broken.py::test_broken 
+INTERNALERROR> Traceback (most recent call last):
+INTERNALERROR>   File ""C:\Users\Josep\PycharmProjects\sloge\venv\Lib\site-packages\_pytest\main.py"", line 270, in wrap_session
+INTERNALERROR>     session.exitstatus = doit(config, session) or 0
+INTERNALERROR>                          ^^^^^^^^^^^^^^^^^^^^^
+INTERNALERROR>   File ""C:\Users\Josep\PycharmProjects\sloge\venv\Lib\site-packages\_pytest\main.py"", line 324, in _main
+INTERNALERROR>     config.hook.pytest_runtestloop(session=session)
+INTERNALERROR>   File ""C:\Users\Josep\PycharmProjects\sloge\venv\Lib\site-packages\pluggy\_hooks.py"", line 265, in __call__
+INTERNALERROR>     return self._hookexec(self.name, self.get_hookimpls(), kwargs, firstresult)
+INTERNALERROR>            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+INTERNALERROR>   File ""C:\Users\Josep\PycharmProjects\s
+...[truncated]",upstream_dependency,https://github.com/pytest-dev/pytest/issues/10466,"[""Confirmed as an upstream bug - thanks again for the report @joseph-e-k! I'd guess that this will be fixed in Python 3.11.1 🙂""]",,[],Maintainer resolution evidence classifies the issue as no repository-local fix; automatic checks found no issue closing commit event.,"[""Maintainer comment by Zac-HD classified as upstream_dependency."", ""Confirmed as an upstream bug - thanks again for the report @joseph-e-k! I'd guess that this will be fixed in Python 3.11.1 🙂""]",,,,,valid_no_gold,Maintainer confirms the pytest internal error is an upstream Python bug expected to be fixed upstream.,,
+abstention_candidate__organic_issue__bd224d5d72e4f9457c29d18c,pytest-dev/pytest,5fc7b21391c959bb5a54174d9084ad55131b8fdb,issue,"Issue title: Inscrutable error `AttributeError: __get__`
+Issue body excerpt: Running `pytest` via `setup.py test` gives a cryptic attribute error:
+
+```sh
+python setup.py test               
+running test
+WARNING: Testing via this command is deprecated and will be removed in a future version. Users looking for a generic test entry point independent of test runner are encouraged to use tox.
+running egg_info
+writing microsoft_bonsai_api.egg-info/PKG-INFO
+writing dependency_links to microsoft_bonsai_api.egg-info/dependency_links.txt
+writing requirements to microsoft_bonsai_api.egg-info/requires.txt
+writing top-level names to microsoft_bonsai_api.egg-info/top_level.txt
+reading manifest file 'microsoft_bonsai_api.egg-info/SOURCES.txt'
+writing manifest file 'microsoft_bonsai_api.egg-info/SOURCES.txt'
+running build_ext
+Traceback (most recent call last):
+  File ""/Users/alex/GitHub/microsoft-bonsai-api/Python/setup.py"", line 19, in <module>
+    setup(
+  File ""/Users/alex/GitHub/microsoft-bonsai-api/Python/venv/lib/python3.9/site-packages/setuptools/__init__.py"", line 153, in setup
+    return distutils.core.setup(**attrs)
+  File ""/usr/local/Cellar/python@3.9/3.9.7/Frameworks/Python.framework/Versions/3.9/lib/python3.9/distutils/core.py"", line 148, in setup
+    dist.run_commands()
+  File ""/usr/local/Cellar/python@3.9/3.9.7/Frameworks/Python.framework/Versions/3.9/lib/python3.9/distutils/dist.py"", line 966, in run_commands
+    self.run_command(cmd)
+  File ""/usr/local/Cellar/python@3.9/3.9.7/Frameworks/Python.framework/Versions/3.9/lib/python3.9/distutils/dist.py"", line 985, in run_command
+    cmd_obj.run()
+  File ""/Users/alex/GitHub/microsoft-bonsai-api/Python/venv/lib/python3.9/site-packages/setuptools/command/test.py"", line 223, in run
+    self.run_tests()
+  File ""/Users/alex/GitHub/microsoft-bonsai-api/Python/venv/lib/python3.9/site-packages/setuptools/com
+...[truncated]",upstream_dependency,https://github.com/pytest-dev/pytest/issues/9199,"[""https://github.com/microsoft/microsoft-bonsai-api/blob/789129d17eb2a187fd353f471e10a4377412629e/Python/setup.py#L37 is incorrectly configured and uses unit-test as the wrong test-runner/collector\n\nthis is a upstream issue\n\nnote that `setup.py test` usage is discouraged and will no longer be unsupported by setuptools in future""]",,[],Maintainer resolution evidence classifies the issue as no repository-local fix; automatic checks found no issue closing commit event.,"[""Maintainer comment by RonnyPfannschmidt classified as upstream_dependency."", ""https://github.com/microsoft/microsoft-bonsai-api/blob/789129d17eb2a187fd353f471e10a4377412629e/Python/setup.py#L37 is incorrectly configured and uses unit-test as the wrong test-runner/collector\n\nthis is a upstream issue\n\nnote that `setup.py test` usage is discouraged and will no longer be unsupported by setuptools in future""]",,,,,valid_no_gold,"Maintainer identifies the external project setup.py test configuration as wrong and upstream, not a pytest repository bug.",,
+abstention_candidate__organic_issue__0c98daf49c141da00ce3ff80,astral-sh/ruff,31db1b6e162356b62e7dc8811f297020da824183,issue,"Issue title: Unable to upload ruff==0.3.2 to Azure Artifacts because it doesn't support Metadata-Version=2.3
+Issue body excerpt: When attempting to upload `ruff==0.3.2` to Azure Artifacts, I get the following error:
+
+```
+Uploading ruff-0.3.2-py3-none-musllinux_1_2_x86_64.whl
+INFO     Response from                                                          
+         https://pkgs.dev.azure.com/ORGNAME/_packaging/REPONAME/pypi/upload:    
+         400 Bad Request - Metadata version '2.3' is unsupported. Supported     
+         versions are: 1.0,1.1,1.2,2.0,2.1. (DevOps Activity ID:                
+         27498FFA-3436-49CE-B4F4-27A5F86057FE)                                  
+INFO     {""$id"":""1"",""innerException"":null,""message"":""Metadata version '2.3' is  
+         unsupported. Supported versions are:                                   
+         1.0,1.1,1.2,2.0,2.1."",""typeName"":""Microsoft.VisualStudio.Services.Packa
+         ging.Shared.WebApi.Exceptions.InvalidPackageException,                 
+         Microsoft.VisualStudio.Services.Packaging.Shared.WebApi"",""typeKey"":""Inv
+         alidPackageException"",""errorCode"":0,""eventId"":3000}                    
+ERROR    HTTPError: 400 Bad Request from                                        
+         https://pkgs.dev.azure.com/ORGNAME/_packaging/REPONAME/pypi/upload     
+         Bad Request - Metadata version '2.3' is unsupported. Supported versions
+         are: 1.0,1.1,1.2,2.0,2.1. (DevOps Activity ID:                         
+         27498FFA-3436-49CE-B4F4-27A5F86057FE)                                  
+```
+
+The error is, in practice, on Azure Artifacts' side, as they are not, it would seem, compliant with the spirit of the Python packaging spec:
+
+https://packaging.python.org/en/latest/specifications/core-metadata/#metadata-version
+
+> Automated tools consuming metadata SHOULD warn if metadata_version is greater than the highest version they support, and
+...[truncated]",upstream_dependency,https://github.com/astral-sh/ruff/issues/10378,"[""Thanks for reporting this in maturin and on the Microsoft platform. Let's see if this gets resolved upstream.""]",,[],Maintainer resolution evidence classifies the issue as no repository-local fix; automatic checks found no issue closing commit event.,"[""Maintainer comment by MichaReiser classified as upstream_dependency."", ""Thanks for reporting this in maturin and on the Microsoft platform. Let's see if this gets resolved upstream.""]",,,,,valid_no_gold,Maintainer defers to maturin/Microsoft platform support for wheel metadata version; no Ruff repo-local fix is indicated.,,
+abstention_candidate__organic_issue__5b90e65c10f2d40c976e10e7,eslint/eslint,0f5a94a84beee19f376025c74f703f275d52c94b,issue,"Issue title: Bug: [no-unused-vars] False positive when returning an assignment
+Issue body excerpt: ### Environment
+
+Node version: v24.11.0
+npm version: v11.6.3
+Local ESLint version: v9.36.0 (Currently used)
+Global ESLint version: Not found
+Operating System: linux 6.17.8-200.fc42.x86_64
+
+
+### What parser are you using?
+
+Default (Espree)
+
+### What did you do?
+
+<details>
+<summary>Configuration</summary>
+
+```js
+rules: {
+  ""no-unused-vars"": ""warn""
+}
+```
+</details>
+
+```js
+function _foobar() {
+  let foo;
+
+  if (Math.random()) {
+    return (foo = { bar: true }); // 'foo' is assigned a value but never used.  ([no-unused-vars](https://eslint.org/docs/rules/no-unused-vars))
+  }
+
+  return;
+}
+```
+
+
+### What did you expect to happen?
+
+No warning should be given
+
+
+
+### What actually happened?
+
+A warning is given despite the result of the assignment being used as the return value of the function in the same line
+
+
+
+### Link to Minimal Reproducible Example
+
+https://eslint.org/play/#eyJ0ZXh0IjoiLyogZXNsaW50IG5vLXVudXNlZC12YXJzOiBbXCJlcnJvclwiXSAqL1xuXG5leHBvcnQgZnVuY3Rpb24gX2Zvb2JhcigpIHtcbiAgbGV0IGZvbztcblxuICBpZiAoTWF0aC5yYW5kb20oKSkge1xuICAgIHJldHVybiAoZm9vID0geyBiYXI6IHRydWUgfSk7XG4gIH1cblxuICByZXR1cm47XG59XG4iLCJvcHRpb25zIjp7InJ1bGVzIjp7fSwibGFuZ3VhZ2VPcHRpb25zIjp7ImVjbWFWZXJzaW9uIjoibGF0ZXN0Iiwic291cmNlVHlwZSI6Im1vZHVsZSIsInBhcnNlck9wdGlvbnMiOnsiZWNtYUZlYXR1cmVzIjp7fX19fX0=
+
+### Participation
+
+- [ ] I am willing to submit a pull request for this issue.
+
+### Additional comments
+
+This might seem a bit silly in isolation, but was simplified from a larger function where I created a `result` variable at the top to return various different results that should all match a given type interface to make narrowing of the result easier outside of the function.
+
+This issue was mostly copypaste from a downstream issue in typescript-eslint (https://github.com/typescript-eslint/typescript-eslin
+...[truncated]",user_error,https://github.com/eslint/eslint/issues/20353,"[""This is not a bug in the core `no-unused-vars` rule. Assignment expression `left = right` always evaluates to `right` (the value of `left` is not read), so `return (foo = { bar: true });` doesn't actually read from `foo`, which means that the variable `foo` is never read in the original code example.""]",,[],Maintainer resolution evidence classifies the issue as no repository-local fix; automatic checks found no issue closing commit event.,"[""Maintainer comment by mdjermanovic classified as user_error."", ""This is not a bug in the core `no-unused-vars` rule. Assignment expression `left = right` always evaluates to `right` (the value of `left` is not read), so `return (foo = { bar: true });` doesn't actually read from `foo`, which means that the variable `foo` is never read in the original code example.""]",,,,,valid_no_gold,Maintainer explains the reported no-unused-vars behavior follows JavaScript assignment-expression semantics; no ESLint repo change is needed.,,
+abstention_candidate__organic_issue__e783b22ef915b1c2fb513b60,microsoft/playwright,ee8208beda1156f29aac8869570b273f2c135c0e,issue,"Issue title: [Bug]: Uncaught exceptions from browser.Close()
+Issue body excerpt: ### Version
+
+1.49.0
+
+### Steps to reproduce
+
+1. Create a new node.js project, install playwright, open in VSCode
+3. Create an example test:
+ 
+```
+import { test } from '@playwright/test';
+import * as playwright from '@playwright/test';
+
+test.describe('Sample test', () => {
+   test('should open Google', async () => {
+      const browser = await playwright.chromium.launch();
+      const page = await browser.newPage();
+      await page.goto('https://google.com');
+      await browser.close();
+   });
+});
+```
+
+4. Check ""Uncaught Exceptions"" option in Run and Debug/Breakpoints settings in VSCode
+5. Start a new Javascript Debug Terminal and execute npx playwright install
+6. Notice the exception ""Exception has occurred: TargetClosedError:Target page, context or browser has been closed""
+
+### Expected behavior
+
+No uncaught exceptions when closing the browser gracefully.
+
+### Actual behavior
+
+While debugging our Playwright tests in VSCode, we noticed they consistently end with TargetClosedError exceptions, even when the test results are successful. 
+
+Initially, we suspected unresolved promises due to missing await statements, but the same issue occurs even with a minimal test case. Reproduction steps are provided below.
+
+
+### Environment
+
+```shell
+System:
+	Windows 10 Enterprise 19045.5131
+	CPU: (6) 64bit
+Binaries:
+	Node: v20.12.2
+	npm: 10.5.0
+npm packages:
+	@playwright/test: 1.49.0
+```",upstream_dependency,https://github.com/microsoft/playwright/issues/33880,"[""We can reproduce in Node 20, but not in Node 22. Looks like this is an upstream bug in Node.js. Try upgrading Node!""]",,[],Maintainer resolution evidence classifies the issue as no repository-local fix; automatic checks found no issue closing commit event.,"[""Maintainer comment by Skn0tt classified as upstream_dependency."", ""We can reproduce in Node 20, but not in Node 22. Looks like this is an upstream bug in Node.js. Try upgrading Node!""]",,,,,valid_no_gold,Maintainer reproduces only on Node 20 and identifies an upstream Node.js bug; suggested fix is upgrading Node.,,
+abstention_candidate__organic_issue__808a86ff0edda7bacee2310f,microsoft/playwright,6bdd2694ee6b0d34bfc8fb4151223c6f3e31a9e5,issue,"Issue title: [Bug]: Iphone Emulation Viewport Issues - (Simular to #32406)
+Issue body excerpt: ### Version
+
+@playwright/test@1.49.1
+
+### Steps to reproduce
+
+# This script loads up www.google.com;
+
+## Using `node iphonetest.js`
+
+```javascript
+const { webkit, devices } = require(""playwright"");
+
+(async () => {
+  const iPhone12 = {
+    ...devices[""iPhone 12""],
+    deviceScaleFactor: 1,
+    hasTouch: true,
+    defaultBrowserType: ""webkit"",
+    isMobile: true,
+    // Add specific iOS platform settings
+    userAgentMetadata: {
+      platform: ""iPhone"",
+      platformVersion: ""16.0"",
+      architecture: """",
+      model: ""iPhone"",
+      mobile: true,
+    },
+  };
+
+  const browser = await webkit.launch({
+    headless: false,
+  });
+
+  const context = await browser.newContext({
+    ...iPhone12,
+    viewport: { width: 390, height: 844 },
+    isMobile: true,
+    hasTouch: true,
+    userAgent:
+      ""Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1"",
+    // Add specific WebKit settings
+    deviceScaleFactor: 3,
+    isMobile: true,
+    hasTouch: true,
+    defaultBrowserType: ""webkit"",
+    // Add iOS-specific features
+    contextOptions: {
+      iosDevice: ""iPhone 12"",
+      forcedColors: ""none"",
+      reducedMotion: ""no-preference"",
+      viewport: { width: 390, height: 844 },
+    },
+  });
+
+  const page = await context.newPage();
+
+  // Add hooks for WebKit-specific behaviors
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, ""platform"", {
+      get: function () {
+        return ""iPhone"";
+      },
+    });
+
+    Object.defineProperty(navigator, ""maxTouchPoints"", {
+      get: function () {
+        return 5;
+      },
+    });
+
+    // Add iOS-specific window properties
+    window.safari = {};
+    window.ApplePaySession = class {};
+    window.webkit = {
+      messageHandlers: {},
+...[truncated]",upstream_dependency,https://github.com/microsoft/playwright/issues/34188,"[""Folding into https://github.com/microsoft/playwright/issues/33702, there is being fixed upstream.""]",,[],Maintainer resolution evidence classifies the issue as no repository-local fix; automatic checks found no issue closing commit event.,"[""Maintainer comment by yury-s classified as upstream_dependency."", ""Folding into https://github.com/microsoft/playwright/issues/33702, there is being fixed upstream.""]",,,,,valid_no_gold,Maintainer folds the iPhone emulation viewport issue into an upstream-fixed browser/platform issue; no Playwright repo fix is indicated.,,
+abstention_candidate__organic_issue__af6d6fae2cb9e3731c26266a,microsoft/playwright,ee8208beda1156f29aac8869570b273f2c135c0e,issue,"Issue title: [Bug]: Page crashes occassionaly mid test run
+Issue body excerpt: ### Version
+
+1.49.0
+
+### Steps to reproduce
+
+Unfortunately, i don't have a sure reproduce scenario, occasionally, in different test types, we've receiving 'page' crash.
+I've turned on `DEBUG=pw:browser` and attaching the results below, I would appreciate if you could have a look and might help me take a step towards the root cause.
+
+**Attached logs from 2 different tests below**
+**Printed `npx envinfo --preset playwright` from the CI machine that runs the test**
+
+### Expected behavior
+
+Page keep alive till end of test
+
+### Actual behavior
+
+Page crash mid test
+
+### Additional context
+
+### Test 1:
+```
+  pw:browser <launching> /ms-playwright/ffmpeg-1010/ffmpeg-linux -loglevel error -f image2pipe -avioflags direct -fpsprobesize 0 -probesize 32 -analyzeduration 0 -c:v mjpeg -i pipe:0 -y -an -r 25 -c:v vp8 -qmin 0 -qmax 50 -crf 8 -deadline realtime -speed 8 -b:v 1M -threads 1 -vf pad=800:450:0:0:gray,crop=800:450:0:0 /codefresh/volume/playwright/test-results/.playwright-artifacts-2/90a3f8a82e58dcf574e7f8509ab91e49.webm +2s
+  pw:browser <launched> pid=921 +12ms
+  pw:browser [pid=99][err] [1205/101044.706738:INFO:peer_connection_dependency_factory.cc(744)] Running WebRTC with a combined Network and Worker thread. +3s
+  pw:browser [pid=99][err] [1205/101044.793793:ERROR:gles2_cmd_decoder_passthrough.cc(1053)] [GroupMarkerNotSet(crbug.com/242999)!:A0601D004C0D0000]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content. +87ms
+  pw:browser [pid=99][err] [1205/101044.802823:ERROR:gles2_cmd_decoder_passthrough.cc(1053)] [GroupMarkerNotSet(crbug.com/242999)!:A0901D004C0D0000]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader fl
+...[truncated]",external_service,https://github.com/microsoft/playwright/issues/33881,"[""The error message \""Terminating render process for bad Mojo message: Received bad user message: Unexpected request: Interest groups may only be joined or left when feature join-ad-interest-group is enabled by Permissions Policy\"" seems to be the core here. Looks like that was recently added to Chromium: https://source.chromium.org/chromium/chromium/src/+/main:content/browser/interest_group/ad_auction_service_impl.cc;l=854-856?q=join-ad-interest-group&ss=chromium%2Fchromium%2Fsrc""]",,[],Maintainer resolution evidence classifies the issue as no repository-local fix; automatic checks found no issue closing commit event.,"[""Maintainer comment by Skn0tt classified as external_service."", ""The error message \""Terminating render process for bad Mojo message: Received bad user message: Unexpected request: Interest groups may only be joined or left when feature join-ad-interest-group is enabled by Permissions Policy\"" seems to be the core here. Looks like that was recently added to Chromium: https://source.chromium.org/chromium/chromium/src/+/main:content/browser/interest_group/ad_auction_service_impl.cc;l=854-856?q=join-ad-interest-group&ss=chromium%2Fchromium%2Fsrc""]",,,,,valid_no_gold,Maintainer identifies a Chromium bad Mojo / interest-group permissions-policy failure; evidence points outside Playwright with no repo-local fix.,,
+abstention_candidate__organic_issue__fe96f7b9e44b68f0a131ba24,numpy/numpy,aaae9d1da5174290152eb380bf22cfd991089bda,issue,"Issue title: BUG: Integer conversion misbehavior on QEMU ppc64le
+Issue body excerpt: ### Describe the issue:
+
+*[I want to begin by first acknowledging that this is a fringe case of a bug appearing only in a VM (I haven't yet been able to reproduce it on real hardware), so please feel free to close this issue right away. However, I felt that I still should at least point it out, in case there is some latent real issue that this might uncover. In any case, hints as to how I can dig deeper into this so that I may report it to the proper channel (be it QEMU, GNU libc, or whatever) would be welcome.]*
+
+
+On a QEMU ppc64le VM, When casting an array of floats to `np.intc`, a weird truncation seems to happen. This only occurs in the VM; it does not happen onthe  real ppc64le hardware I had access to (although that system hat an older 4.19 kernel; I cannot change that).
+
+In the code below, I create arrays of value `1.` of length 1 through 10,  and then cast them to `np.int64` and `np.intc` for comparison.
+
+This works fine for arrays with length <= 3. If fails for longer ones, and apparently there is a pattern in this failure.
+
+### Reproduce the code example:
+
+```python
+import numpy as np
+for i in range(1, 11):
+    a = np.full(i, 1.)
+    print(i, a, a.astype(np.int64), a.astype(np.intc))
+```
+
+
+### Error message:
+
+```shell
+1 [1.] [1] [1]
+2 [1. 1.] [1 1] [1 1]
+3 [1. 1. 1.] [1 1 1] [1 1 1]
+4 [1. 1. 1. 1.] [1 1 1 1] [0 0 0 0]
+5 [1. 1. 1. 1. 1.] [1 1 1 1 1] [0 0 0 0 1]
+6 [1. 1. 1. 1. 1. 1.] [1 1 1 1 1 1] [0 0 0 0 1 1]
+7 [1. 1. 1. 1. 1. 1. 1.] [1 1 1 1 1 1 1] [0 0 0 0 1 1 1]
+8 [1. 1. 1. 1. 1. 1. 1. 1.] [1 1 1 1 1 1 1 1] [0 0 0 0 0 0 0 0]
+9 [1. 1. 1. 1. 1. 1. 1. 1. 1.] [1 1 1 1 1 1 1 1 1] [0 0 0 0 0 0 0 0 1]
+10 [1. 1. 1. 1. 1. 1. 1. 1. 1. 1.] [1 1 1 1 1 1 1 1 1 1] [0 0 0 0 0 0 0 0 1 1]
+```
+
+
+### NumPy/Python version information:
+
+1.22.1 3.9.10 (main, Jan 16 2022, 17:12:1
+...[truncated]",upstream_dependency,https://github.com/numpy/numpy/issues/20964,"[""Here is what GCC generate from the provided source code (convert.c) within the upstream bug, see https://godbolt.org/z/ej7naaP7G.\n```ASM\n.L4:\n        lxvd2x 33,4,9\n        lxvd2x 32,6,9\n        sldi 10,8,4\n        addi 9,9,32\n        addi 8,8,1\n        xvcvdpsxws 33,33\n        xvcvdpsxws 32,32\n        vperm 0,0,1,13\n        stxvd2x 32,5,10\n        bdnz .L4\n        rldicr 9,3,0,61\n        rldicr 8,3,3,58\n        rldicr 10,3,2,59\n        cmpld 0,3,9\n        subf 7,9,7\n        add 4,4,8\n        add 5,5,10\n        beqlr 0\n# vperm indices\n.LC1:\n        .byte   23\n        .byte   22\n        .byte   21\n        .byte   20\n        .byte   31\n        .byte   30\n        .byte   29\n        .byte   28\n        .byte   7\n        .byte   6\n        .byte   5\n        .byte   4\n        .byte   15\n        .byte   14\n        .byte   13\n        .byte   12\n```\nGCC performs 2 loads, 2 truncate via `xvcvdpsxws`, then permuting the even elements and here is the bug. GCC suppose to permute the odd elements on li\n...[truncated]""]",,[],Maintainer resolution evidence classifies the issue as no repository-local fix; automatic checks found no issue closing commit event.,"[""Maintainer comment by seiko2plus classified as upstream_dependency."", ""Here is what GCC generate from the provided source code (convert.c) within the upstream bug, see https://godbolt.org/z/ej7naaP7G.\n```ASM\n.L4:\n        lxvd2x 33,4,9\n        lxvd2x 32,6,9\n        sldi 10,8,4\n        addi 9,9,32\n        addi 8,8,1\n        xvcvdpsxws 33,33\n        xvcvdpsxws 32,32\n        vperm 0,0,1,13\n        stxvd2x 32,5,10\n        bdnz .L4\n        rldicr 9,3,0,61\n        rldicr 8,3,3,58\n        rldicr 10,3,2,59\n        cmpld 0,3,9\n        subf 7,9,7\n        add 4,4,8\n        add 5,5,10\n        beqlr 0\n# vperm indices\n.LC1:\n        .byte   23\n        .byte   22\n        .byte   21\n        .byte   20\n        .byte   31\n        .byte   30\n        .byte   29\n        .byte   28\n        .byte   7\n        .byte   6\n        .byte   5\n        .byte   4\n        .byte   15\n        .byte   14\n        .byte   13\n        .byte   12\n```\nGCC performs 2 loads, 2 truncate via `xvcvdpsxws`, then permuting the even elements and here is the bug. GCC suppose to permute the odd elements on li\n...[truncated]""]",,,,,valid_no_gold,Resolution evidence analyzes GCC/upstream behavior for the ppc64le conversion issue; no NumPy repo fix is indicated.,,
+abstention_candidate__organic_issue__6976b6560c2cde1e76891c93,numpy/numpy,b9e3ed2e41f99ce146b16d8d1041842c38685430,issue,"Issue title: BUG: Building on Python 3.15.0a2 failing due to `multiarray/conversion_utils.h`
+Issue body excerpt: ### Describe the issue:
+
+I'm testing Python 3.15.0a2 support for a variety of packages, and failing to build/install NumPy 2.3.5. This is reproducible with the Dockerfile below. The build runs under 3.15.0a1.
+
+This line appears to be the problem: https://github.com/numpy/numpy/blob/eeaf04662e07cc8e2041f3e25bbd3698949a0c02/numpy/_core/src/multiarray/conversion_utils.h#L116
+
+### Reproduce the code example:
+
+```python
+# syntax=docker/dockerfile:1
+FROM python:3.15.0a2-trixie
+RUN apt update
+RUN apt install -y gcc g++ gfortran libopenblas-dev liblapack-dev pkg-config python3-pip python3-dev
+RUN python -m pip install numpy --no-binary numpy
+```
+
+### Error message:
+
+```shell
+50.60       FAILED: [code=1] numpy/_core/_multiarray_umath.cpython-315-x86_64-linux-gnu.so.p/meson-generated_scalartypes.c.o
+50.60       cc -Inumpy/_core/_multiarray_umath.cpython-315-x86_64-linux-gnu.so.p -Inumpy/_core -I../numpy/_core -Inumpy/_core/include -I../numpy/_core/include -I../numpy/_core/src/common -I../numpy/_core/src/multiarray -I../numpy/_core/src/npymath -I../numpy/_core/src/umath -I../numpy/_core/src/highway -I/usr/include/x86_64-linux-gnu/openblas-pthread/ -I/usr/local/include/python3.15 -I/tmp/pip-install-71x6hy6w/numpy_7df950a45fa74af1b0409090751c8669/.mesonpy-1s3ilg9n/meson_cpu -fvisibility=hidden -fdiagnostics-color=always -DNDEBUG -Wall -Winvalid-pch -std=c11 -O3 -fno-strict-aliasing -msse -msse2 -msse3 -DNPY_HAVE_SSE2 -DNPY_HAVE_SSE -DNPY_HAVE_SSE3 -fPIC -DHAVE_CBLAS -DNPY_INTERNAL_BUILD -DHAVE_NPY_CONFIG_H -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE=1 -D_LARGEFILE64_SOURCE=1 -MD -MQ numpy/_core/_multiarray_umath.cpython-315-x86_64-linux-gnu.so.p/meson-generated_scalartypes.c.o -MF numpy/_core/_multiarray_umath.cpython-315-x86_64-linux-gnu.so.p/meson-generated_scalartypes.c.o.d -o num
+...[truncated]",upstream_dependency,https://github.com/numpy/numpy/issues/30379,"[""This is fixed upstream in CPython: https://github.com/python/cpython/issues/142163""]",,[],Maintainer resolution evidence classifies the issue as no repository-local fix; automatic checks found no issue closing commit event.,"[""Maintainer comment by ngoldbaum classified as upstream_dependency."", ""This is fixed upstream in CPython: https://github.com/python/cpython/issues/142163""]",,,,,valid_no_gold,Maintainer says the Python 3.15 build failure is fixed upstream in CPython; no NumPy repository fix is indicated.,,
+abstention_candidate__organic_issue__6f45a5ec105836f5948b1646,scrapy/scrapy,0e579182319504ba7bfd0c09333fe92f70c6d312,issue,"Issue title: Scrapy parses commented out <base> element
+Issue body excerpt: ### Description
+
+I'm building a scraper that follows some urls with a pattern with the response.follow function. I'm currently stuck on a webpage which has the <base> element in the header commented out. The href in the <base> element is invalid. When I try to follow a relative url on the webpage it incorrectly tries to send me to the invalid url. It ignores the fact that it actually is a comment.
+
+### Steps to Reproduce
+
+1. Use the response.follow function
+2. Go to http://prahm-stiftung.de/
+3. Try to follow the ""Kontakt & Impressum"" page
+4. It redirects to "" http://www.www.prahm-stifung.de/5-0-Kontakt-und-Impressum.html"" which is incorrect. The <base> element is commented out
+
+**Expected behavior:** Ignore the <base> element.
+
+**Actual behavior:** It uses the commented out <base> element to get the url to follow
+
+**Reproduces how often:** Always
+
+### Versions
+
+Scrapy       : 2.1.0
+lxml         : 4.5.1.0
+libxml2      : 2.9.10
+cssselect    : 1.1.0
+parsel       : 1.6.0
+w3lib        : 1.22.0
+Twisted      : 20.3.0
+Python       : 3.8.2 (v3.8.2:7b3ab5921f, Feb 24 2020, 17:52:18) - [Clang 6.0 (clang-600.0.57)]
+pyOpenSSL    : 19.1.0 (OpenSSL 1.1.1g  21 Apr 2020)
+cryptography : 2.9.2
+Platform     : macOS-10.15.6-x86_64-i386-64bit
+
+### Additional context
+
+page = '5-0-Kontakt-und-Impressum.html'
+yield response.follow(page, callback=self.parse)",upstream_dependency,https://github.com/scrapy/scrapy/issues/4763,"[""Upstream issue: https://github.com/scrapy/w3lib/issues/70""]",,[],Maintainer resolution evidence classifies the issue as no repository-local fix; automatic checks found no issue closing commit event.,"[""Maintainer comment by Gallaecio classified as upstream_dependency."", ""Upstream issue: https://github.com/scrapy/w3lib/issues/70""]",,,,,valid_no_gold,Maintainer identifies the commented base tag behavior as an upstream w3lib issue; no Scrapy repo fix is indicated.,,
+abstention_candidate__organic_issue__a3cae675202a76462bd77288,scrapy/scrapy,5dcf8b9015d412919aca99cad0371298f9591b94,issue,"Issue title: MemoryError: Cannot allocate write+execute memory for ffi.callback()
+Issue body excerpt: ### Description
+
+I have simple Scrapy script which fails on Ubuntu 18 with weird memory error.
+Works fine on local Mac, but fails on remote host.
+Looks like a openSSL issue. Any advice is appreciated.
+
+### Steps to Reproduce
+Simply run scrapy script
+
+**Expected behavior:** 
+Run normally
+
+**Actual behavior:** 
+```
+2019-10-31 20:24:51 [scrapy.downloadermiddlewares.robotstxt] ERROR: Error downloading <GET https://xxx.yyy/robots.txt>: Cannot allocate write+execute memory for ffi.callback(). You might be running on a system that prevents this. For more information, see https://cffi.readthedocs.io/en/latest/using.html#callbacks
+Traceback (most recent call last):
+  File ""/home/scrapy/env/local/lib/python2.7/site-packages/twisted/internet/defer.py"", line 1416, in _inlineCallbacks
+    result = result.throwExceptionIntoGenerator(g)
+  File ""/home/scrapy/env/local/lib/python2.7/site-packages/twisted/python/failure.py"", line 512, in throwExceptionIntoGenerator
+    return g.throw(self.type, self.value, self.tb)
+  File ""/home/scrapy/env/local/lib/python2.7/site-packages/scrapy/core/downloader/middleware.py"", line 43, in process_request
+    defer.returnValue((yield download_func(request=request,spider=spider)))
+  File ""/home/scrapy/env/local/lib/python2.7/site-packages/scrapy/utils/defer.py"", line 45, in mustbe_deferred
+    result = f(*args, **kw)
+  File ""/home/scrapy/env/local/lib/python2.7/site-packages/scrapy/core/downloader/handlers/__init__.py"", line 71, in download_request
+    return handler.download_request(request, spider)
+  File ""/home/scrapy/env/local/lib/python2.7/site-packages/scrapy/core/downloader/handlers/http11.py"", line 68, in download_request
+    return agent.download_request(request)
+  File ""/home/scrapy/env/local/lib/python2.7/site-packages/scrapy/core/downloader/ha
+...[truncated]",upstream_dependency,https://github.com/scrapy/scrapy/issues/4117,"[""The upstream issue is still open but the comments seem to say it's now fixed in cffi.""]",,[],Maintainer resolution evidence classifies the issue as no repository-local fix; automatic checks found no issue closing commit event.,"[""Maintainer comment by wRAR classified as upstream_dependency."", ""The upstream issue is still open but the comments seem to say it's now fixed in cffi.""]",,,,,valid_no_gold,Maintainer says the upstream cffi issue appears fixed; no Scrapy repository change is indicated.,,
+abstention_candidate__organic_issue__f53075edbc65bf86075ca343,tokio-rs/tokio,a05135a4f8866679dca7ad721fa37ab447ccbb47,issue,"Issue title: error[E0658]: use of unstable library feature 'proc_macro_is_available'
+Issue body excerpt: **Version**
+
+`cargo tree | grep tokio`
+
+```
+$ cargo tree | grep tokio
+└── tokio v1.17.0
+    └── tokio-macros v1.7.0 (proc-macro)
+```
+
+````
+$ rustc -V
+rustc 1.57.0-nightly (fdf65053e 2021-09-07)
+```
+
+**Platform**
+
+```
+Linux ThinkPadXXX 5.4.0-105-generic #119-Ubuntu SMP Mon Mar 7 18:49:24 UTC 2022 x86_64 x86_64 x86_64 GNU/Linux
+```
+
+**Description**
+
+I'm trying to run some sample tokio code, but I can't even compile the file! I'm getting a `proc_macro_is_available` error.
+
+I tried this code:
+
+```rs
+#![feature(proc_macro_is_available)]
+
+use tokio::process::Command;
+use tokio::sync::{Mutex, MutexGuard};
+use tokio::time::delay_for;  // sleep not delay_for in latest tokio
+
+fn main() {
+    let mutex = Mutex::new(1);
+    let n = mutex.lock();
+}
+```
+
+```toml
+...
+
+[dependencies]
+tokio = { version = ""1.17"", features = [""full""] }
+```
+
+[code sample that causes the bug]
+
+I expected to see this happen: [explanation]
+
+Runs the sample
+
+Instead, this happened: [explanation]
+
+```
+$ cargo run
+   Compiling libc v0.2.121
+   Compiling proc-macro2 v1.0.36
+   Compiling cfg-if v1.0.0
+   Compiling unicode-xid v0.2.2
+   Compiling syn v1.0.90
+   Compiling log v0.4.16
+   Compiling parking_lot_core v0.9.1
+   Compiling smallvec v1.8.0
+   Compiling memchr v2.4.1
+   Compiling scopeguard v1.1.0
+   Compiling bytes v1.1.0
+   Compiling once_cell v1.10.0
+   Compiling pin-project-lite v0.2.8
+   Compiling lock_api v0.4.6
+error[E0658]: use of unstable library feature 'proc_macro_is_available'
+  --> /home/fortanix/.cargo/registry/src/github.com-1ecc6299db9ec823/proc-macro2-1.0.36/src/detection.rs:28:21
+   |
+28 |     let available = proc_macro::is_available();
+   |                     ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: see issue #71436 <https://github.com/rust-lang/rust/issues/71436> for more information
+...[truncated]",upstream_dependency,https://github.com/tokio-rs/tokio/issues/4586,"[""This is upstream issue: https://github.com/dtolnay/proc-macro2/issues/307""]",,[],Maintainer resolution evidence classifies the issue as no repository-local fix; automatic checks found no issue closing commit event.,"[""Maintainer comment by taiki-e classified as upstream_dependency."", ""This is upstream issue: https://github.com/dtolnay/proc-macro2/issues/307""]",,,,,valid_no_gold,Maintainer identifies proc-macro2 upstream issue for unstable proc_macro_is_available; no Tokio repo fix.,,
+abstention_candidate__organic_issue__4634ad6e22df7c3edda58c65,tokio-rs/tokio,d1744bf260384838e00311230faf7787a97f477b,issue,"Issue title: A vague error, and I don't know what the problem is
+Issue body excerpt: version: tokio 0.2.1
+
+I even don’t know where this question should be mentioned, and I feel vague that this should be a rustc problem. If so, please tell me, I will write the problem over rustc again
+
+Example：
+
+```rust
+use futures::{
+    channel::mpsc::channel,
+    stream::{iter, pending},
+    SinkExt, StreamExt,
+};
+use std::future::Future;
+use std::pin::Pin;
+
+pub(crate) type BoxedFutureTask = Pin<Box<dyn Future<Output = ()> + 'static + Send>>;
+
+fn main() {
+    let mut rt = tokio::runtime::Runtime::new().unwrap();
+    let (sender, mut receiver) = channel(128);
+    rt.block_on(async move {
+        tokio::spawn(async move {
+            let mut tasks = iter(
+                (1..100)
+                    .map(|_| {
+                        Box::pin(async {
+                            let mut stream = pending::<()>();
+                            loop {
+                                stream.next().await;
+                            }
+                        }) as BoxedFutureTask
+                    })
+                    .collect::<Vec<_>>(),
+            )
+            .map(Ok);
+            let _ = sender.send_all(&mut tasks).await;
+        });
+        loop {
+            if receiver.next().await.is_none() {
+                break
+            }
+        }
+    })
+}
+```
+
+will output：
+```
+error[E0308]: mismatched types
+  --> src/main.rs:12:9
+   |
+12 |         tokio::spawn(async move {
+   |         ^^^^^^^^^^^^ one type is more general than the other
+   |
+   = note: expected type `std::ops::FnOnce<(std::pin::Pin<std::boxed::Box<dyn core::future::future::Future<Output = ()> + std::marker::Send>>,)>`
+              found type `std::ops::FnOnce<(std::pin::Pin<std::boxed::Box<dyn core::future::future::Future<Output = ()> + std::marker::Send>>,)>`
+
+error: aborting due to previous error
+```
+...[truncated]",upstream_dependency,https://github.com/tokio-rs/tokio/issues/1835,"[""Closing as this is not our bug.""]",,[],Maintainer resolution evidence classifies the issue as no repository-local fix; automatic checks found no issue closing commit event.,"[""Maintainer comment by Darksonn classified as upstream_dependency."", ""Closing as this is not our bug.""]",,,,,valid_no_gold,Maintainer closes as not a Tokio bug; query itself suspects rustc and no repository-local Tokio fix is indicated.,,
+abstention_candidate__organic_issue__b130fa8494857891b059c71a,vitejs/vite,f80ff77a4326669a07f76df3a2ccd66f9e0cafa5,issue,"Issue title: External stylesheet imports are removed when using lightningcss
+Issue body excerpt: ### Describe the bug
+
+When an external url is imported using `@import` and css is transpiled using lightningcss, the `@import` statement is removed, both in development mode and at build. No error is thrown.
+
+I'm experiencing this bug with vite 4.4.9.
+
+Here is a typical stylesheet that would cause this bug:
+
+```css
+@import url('https://fonts.googleapis.com/css2?family=Orbitron&display=swap');
+```
+
+### Reproduction
+
+https://stackblitz.com/edit/vitejs-vite-anu64d?file=style.css
+
+### Steps to reproduce
+
+- Run `npm install` then `npm run build`.
+- Compare the bundled stylesheet (`dist/assets/index-*.css`) with the source one (`style.css`).
+
+### System Info
+
+```shell
+System:
+  OS: macOS 13.5.2
+  CPU: (12) arm64 Apple M2 Max
+  Memory: 947.03 MB / 32.00 GB
+  Shell: 5.9 - /bin/zsh
+Binaries:
+  Node: 18.16.0 - ~/.nvm/versions/node/v18.16.0/bin/node
+  Yarn: 1.22.19 - ~/.nvm/versions/node/v18.16.0/bin/yarn
+  npm: 9.5.1 - ~/.nvm/versions/node/v18.16.0/bin/npm
+  pnpm: 8.6.5 - /opt/homebrew/bin/pnpm
+Browsers:
+  Chrome: 117.0.5938.92
+  Safari: 16.6
+```
+
+
+### Used Package Manager
+
+npm
+
+### Logs
+
+_No response_
+
+### Validations
+
+- [X] Follow our [Code of Conduct](https://github.com/vitejs/vite/blob/main/CODE_OF_CONDUCT.md)
+- [X] Read the [Contributing Guidelines](https://github.com/vitejs/vite/blob/main/CONTRIBUTING.md).
+- [X] Read the [docs](https://vitejs.dev/guide).
+- [X] Check that there isn't [already an issue](https://github.com/vitejs/vite/issues) that reports the same bug to avoid creating a duplicate.
+- [X] Make sure this is a Vite issue and not a framework-specific issue. For example, if it's a Vue SFC related bug, it should likely be reported to [vuejs/core](https://github.com/vuejs/core) instead.
+- [X] Check that this is a concrete bug. For Q&A open a [GitHub Discussion](https
+...[truncated]",upstream_dependency,https://github.com/vitejs/vite/issues/14505,"[""It doesn't seem like configuring `analyzeDependencies` helped. It seems like this is an upstream bug (https://github.com/parcel-bundler/lightningcss/issues/479) and there's not much we can do without that.""]",,[],Maintainer resolution evidence classifies the issue as no repository-local fix; automatic checks found no issue closing commit event.,"[""Maintainer comment by bluwy classified as upstream_dependency."", ""It doesn't seem like configuring `analyzeDependencies` helped. It seems like this is an upstream bug (https://github.com/parcel-bundler/lightningcss/issues/479) and there's not much we can do without that.""]",,,,,valid_no_gold,Maintainer identifies LightningCSS as the upstream cause and says Vite cannot do much without that fix.,,
+abstention_candidate__organic_issue__0f07f8176a2e6a5b2d6b2917,vitejs/vite,ac5d8a7745776f6d7921a110ac650ab48037debf,issue,"Issue title: Non-deterministic build
+Issue body excerpt: ### Describe the bug
+
+Executing builds multiple times with the same code generates different hashes.
+
+### Reproduction
+
+https://github.com/ttionya/vite-non-deterministic-build-repro
+
+### Steps to reproduce
+
+Clone the aforementioned repro, install dependencies, and execute `npm run build` multiple times. Verify the hash of the vendor file.
+
+### System Info
+
+```shell
+System:                                                    
+    OS: Windows 10 10.0.19045                                
+    CPU: (8) x64 Intel(R) Core(TM) i7-10510U CPU @ 1.80GHz   
+    Memory: 3.92 GB / 15.76 GB                               
+  Binaries:
+    Node: 14.21.0
+    npm: 9.6.7
+  Browsers:
+    Edge: Spartan (44.19041.1266.0), Chromium (114.0.1823.58)
+    Internet Explorer: 11.0.19041.1566
+  npmPackages:
+    @vitejs/plugin-legacy: ^4.0.0 => 4.0.1 
+    @vitejs/plugin-vue2: ^2.2.0 => 2.2.0 
+    @vitejs/plugin-vue2-jsx: ^1.1.0 => 1.1.0 
+    vite: ^4.3.8 => 4.3.8
+```
+
+
+### Used Package Manager
+
+npm
+
+### Logs
+
+_No response_
+
+### Validations
+
+- [X] Follow our [Code of Conduct](https://github.com/vitejs/vite/blob/main/CODE_OF_CONDUCT.md)
+- [X] Read the [Contributing Guidelines](https://github.com/vitejs/vite/blob/main/CONTRIBUTING.md).
+- [X] Read the [docs](https://vitejs.dev/guide).
+- [X] Check that there isn't [already an issue](https://github.com/vitejs/vite/issues) that reports the same bug to avoid creating a duplicate.
+- [X] Make sure this is a Vite issue and not a framework-specific issue. For example, if it's a Vue SFC related bug, it should likely be reported to [vuejs/core](https://github.com/vuejs/core) instead.
+- [X] Check that this is a concrete bug. For Q&A open a [GitHub Discussion](https://github.com/vitejs/vite/discussions) or join our [Discord Chat Server](https://chat.vitejs.dev/).
+- [X
+...[truncated]",upstream_dependency,https://github.com/vitejs/vite/issues/13672,"[""Seems like `dayjs` is seen as commonjs, and there's a related upstream bug: https://github.com/rollup/plugins/issues/1425\n\nThanks for the simple repro (and sorry for not responding in the other issue). Got a few issues to juggle, but I'll try to check this deeper now to see if there's something that can be fixed.\n\nAlso as explained in the upstream issue, the workaround would be:\n\n```js\nexport default defineConfig({\n  build: {\n    commonjsOptions: {\n      strictRequires: true\n    }\n  }\n})\n```""]",,[],Maintainer resolution evidence classifies the issue as no repository-local fix; automatic checks found no issue closing commit event.,"[""Maintainer comment by bluwy classified as upstream_dependency."", ""Seems like `dayjs` is seen as commonjs, and there's a related upstream bug: https://github.com/rollup/plugins/issues/1425\n\nThanks for the simple repro (and sorry for not responding in the other issue). Got a few issues to juggle, but I'll try to check this deeper now to see if there's something that can be fixed.\n\nAlso as explained in the upstream issue, the workaround would be:\n\n```js\nexport default defineConfig({\n  build: {\n    commonjsOptions: {\n      strictRequires: true\n    }\n  }\n})\n```""]",,,,,valid_no_gold,"Maintainer points to Rollup commonjs upstream behavior and gives a user Vite config workaround, not a Vite repository change.",,
+abstention_candidate__organic_issue__9a468e31917a0b98d689dfca,vitejs/vite,e92d025cedabb477687d6a352ee8c9b7d529f623,issue,"Issue title: [BUG] HMR does not work inside a default slot using PrimeVue
+Issue body excerpt: ### Describe the bug
+
+I don't know if this is an issue with Vite or Vue or PrimeVue... But Vite is directly involved in HMR so it could be a Vite issue.
+
+If I change the content inside the TabPanel's default slot, HMR does not work automatically unless the page is reloaded. To reproduct this, simply clone run the reproduction repo and go to App.vue and change anything inside TabPanel default slot (line 9). Then if you look at the browser the content did not automatically update unless you refresh the whole page.
+
+### Reproduction
+
+https://github.com/martinszeltins/vue-hmr-not-working-slot
+
+### Steps to reproduce
+
+1. Clone and run the project.
+
+```shell
+$ git clone git@github.com:martinszeltins/vue-hmr-not-working-slot.git
+$ cd vue-hmr-not-working-slot
+$ npm install
+$ npm run dev
+```
+2. Now open App.vue and change the default slot of TabPanel (line 9). Then save the App.vue file and look at the browser - HMR did not work unless you manually reload the page.
+
+All I did was take the Vite starter template and added PrimeVue.
+
+```shell
+$ npm create vite@latest my-vue-app -- --template vue
+$ cd my-vue-app
+$ npm install
+$ npm install primevue@^3 --save
+$ npm install primeicons --save
+```
+
+Then I added PrimeVue to `main.js` like this:
+
+```js
+import { createApp } from 'vue'
+import './style.css'
+import App from './App.vue'
+import PrimeVue from 'primevue/config'
+import AppModal from 'primevue/dialog'
+
+const app = createApp(App);
+
+app.use(PrimeVue);
+app.component('AppModal', AppModal);
+app.mount('#app')
+```
+
+And then I added the component in `App.vue` as you can see from the reproduction repo. I didn't change anything else. Something is wrong.
+
+### System Info
+
+```shell
+System:
+    OS: Linux 5.15 Ubuntu 20.04.5 LTS (Focal Fossa)
+    CPU: (8) x64 Intel(R) Core(TM) i5-10300H CPU @ 2.
+...[truncated]",upstream_dependency,https://github.com/vitejs/vite/issues/11112,"[""Duplicate of vitejs/vite-plugin-vue#3\n\nThis is an upstream bug (https://github.com/vuejs/core/issues/7155)""]",,[],Maintainer resolution evidence classifies the issue as no repository-local fix; automatic checks found no issue closing commit event.,"[""Maintainer comment by sapphi-red classified as upstream_dependency."", ""Duplicate of vitejs/vite-plugin-vue#3\n\nThis is an upstream bug (https://github.com/vuejs/core/issues/7155)""]",,,,,valid_no_gold,Maintainer marks the HMR issue as duplicate of plugin/Vue upstream issue; no Vite core repository fix is indicated.,,
+abstention_candidate__organic_issue__cf9b3ba649a0551b064760f7,vitejs/vite,cecc366614042e54744a1e3ef7aada0ca5f7c491,issue,"Issue title: React - Static class field initialization fails
+Issue body excerpt: ### Describe the bug
+
+So after updating some of our dependencies we had to enable typescript's `useDefineForClassFields` feature. Since then, some of our legacy react class components fail to initialize their static class fields. 
+
+This error only occurs if these two conditions are met
+
+- The class itself is decorated
+- The static class field initialization self references another static class field
+
+Transformations produced by `webpack` or a bare `esbuild` build seem to work just fine.
+
+e.g.
+
+```typescript
+import React from 'react';
+import { observer } from 'mobx-react';
+
+@observer
+export default class Test extends React.Component {
+
+  public static foo = 'foo';
+
+  private static fooBar = `${Test.foo}-bar`;
+
+  public render() {
+    return <div>{Test.fooBar}</div>;
+  }
+}
+```
+
+The error happens on the initialization of `fooBar` because `Test.foo` is accessed before initialization.
+```
+Test.tsx:18 Uncaught ReferenceError: Cannot access 'Test' before initialization
+    at <static_initializer> (Test.tsx:18:19)
+    at Test.tsx:16:32
+```
+
+The transformed code
+
+```typescript
+var __defProp = Object.defineProperty;
+var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+var __decorateClass = (decorators, target, key, kind) => {
+  var result = kind > 1 ? void 0 : kind ? __getOwnPropDesc(target, key) : target;
+  for (var i = decorators.length - 1, decorator; i >= 0; i--)
+    if (decorator = decorators[i])
+      result = (kind ? decorator(target, key, result) : decorator(result)) || result;
+  if (kind && result)
+    __defProp(target, key, result);
+  return result;
+};
+var _jsxFileName = ""/home/projects/vitejs-static-initialization-error/src/Test.tsx"";
+import __vite__cjsImport0_react from ""/node_modules/.vite/deps/react.js?v=d1d1a958""; const React = __vite__cjsImport0_react.__esModul
+...[truncated]",upstream_dependency,https://github.com/vitejs/vite/issues/11805,"[""This is an upstream bug.\n\n```ts\nfunction dec(constr: Function) {}\n\n@dec\nclass Test {\n  public static foo = 'bar';\n\n  private static fooBar = `${Test.foo}-bar`;\n\n  public render() {\n    return Test.fooBar;\n  }\n}\n```\nFor this code, esbuild outputs ([esbuild repl](https://hyrious.me/esbuild-repl/?version=0.14.51&mode=transform&input=function+dec%28constr%3A+Function%29+%7B%7D%0A%0A%40dec%0Aclass+Test+%7B%0A++public+static+foo+%3D+%27bar%27%3B%0A%0A++private+static+fooBar+%3D+%60%24%7BTest.foo%7D-bar%60%3B%0A%0A++public+render%28%29+%7B%0A++++return+Test.fooBar%3B%0A++%7D%0A%7D%0A&options=--loader%3Dts+--target%3Desnext)):\n```js\nvar __defProp = Object.defineProperty;\nvar __getOwnPropDesc = Object.getOwnPropertyDescriptor;\nvar __decorateClass = (decorators, target, key, kind) => {\n  var result = kind > 1 ? void 0 : kind ? __getOwnPropDesc(target, key) : target;\n  for (var i = decorators.length - 1, decorator; i >= 0; i--)\n    if (decorator = decorators[i])\n      result = (kind ? decorator(t\n...[truncated]""]",,[],Maintainer resolution evidence classifies the issue as no repository-local fix; automatic checks found no issue closing commit event.,"[""Maintainer comment by sapphi-red classified as upstream_dependency."", ""This is an upstream bug.\n\n```ts\nfunction dec(constr: Function) {}\n\n@dec\nclass Test {\n  public static foo = 'bar';\n\n  private static fooBar = `${Test.foo}-bar`;\n\n  public render() {\n    return Test.fooBar;\n  }\n}\n```\nFor this code, esbuild outputs ([esbuild repl](https://hyrious.me/esbuild-repl/?version=0.14.51&mode=transform&input=function+dec%28constr%3A+Function%29+%7B%7D%0A%0A%40dec%0Aclass+Test+%7B%0A++public+static+foo+%3D+%27bar%27%3B%0A%0A++private+static+fooBar+%3D+%60%24%7BTest.foo%7D-bar%60%3B%0A%0A++public+render%28%29+%7B%0A++++return+Test.fooBar%3B%0A++%7D%0A%7D%0A&options=--loader%3Dts+--target%3Desnext)):\n```js\nvar __defProp = Object.defineProperty;\nvar __getOwnPropDesc = Object.getOwnPropertyDescriptor;\nvar __decorateClass = (decorators, target, key, kind) => {\n  var result = kind > 1 ? void 0 : kind ? __getOwnPropDesc(target, key) : target;\n  for (var i = decorators.length - 1, decorator; i >= 0; i--)\n    if (decorator = decorators[i])\n      result = (kind ? decorator(t\n...[truncated]""]",,,,,valid_no_gold,Maintainer demonstrates the static class field failure as an esbuild upstream bug; no Vite repo fix is indicated.,,
+abstention_candidate__organic_issue__cd2fd050bc2099a3166d9769,vitejs/vite,34826aae015ed16dc9b9096c0f778154ca6981a6,issue,"Issue title: Vite transforms and strips out part of a function resulting in breakage
+Issue body excerpt: ### Describe the bug
+
+I'm writing a library which imports the `@github/text-expander-element` custom element. During build Vite is transforming a function in a way that leads to the element breaking.
+
+The build file has transformed the `onCommit` function to this:
+```js
+onCommit({ target }) {
+  const item = target;
+  if (!(item instanceof HTMLElement))
+    return;
+  if (!this.combobox)
+    return;
+  const match = this.match;
+  if (!match)
+    return;
+  this.input.value.substring(0, match.position - match.key.length);
+  this.input.value.substring(match.position + match.text.length);
+  const detail = { item, key: match.key, value: null, continue: false };
+  const canceled = !this.expander.dispatchEvent(new CustomEvent(""text-expander-value"", { cancelable: true, detail }));
+  if (canceled)
+    return;
+  return;
+}
+```
+
+while in the original it looks like this:
+
+```js
+onCommit({ target }) {
+  var _a
+  const item = target
+  if (!(item instanceof HTMLElement)) return
+  if (!this.combobox) return
+  const match = this.match
+  if (!match) return
+  const beginning = this.input.value.substring(
+    0,
+    match.position - match.key.length,
+  )
+  const remaining = this.input.value.substring(
+    match.position + match.text.length,
+  )
+  const detail = { item, key: match.key, value: null, continue: false }
+  const canceled = !this.expander.dispatchEvent(
+    new CustomEvent(""text-expander-value"", { cancelable: true, detail }),
+  )
+  if (canceled) return
+  if (!detail.value) return
+  let suffix =
+    (_a = this.expander.getAttribute(""suffix"")) !== null && _a !== void 0
+      ? _a
+      : "" ""
+  if (detail.continue) {
+    suffix = """"
+  }
+  const value = `${detail.value}${suffix}`
+  this.input.value = beginning + value + remaining
+  const cursor = beginning.length + value.length
+  this.de
+...[truncated]",upstream_dependency,https://github.com/vitejs/vite/issues/14298,"[""This seems to be an upstream issue in Rollup. I created an issue there https://github.com/rollup/rollup/issues/5122. Closing this in favour of it as there's not much we can do here. Thanks for the repro!""]",,[],Maintainer resolution evidence classifies the issue as no repository-local fix; automatic checks found no issue closing commit event.,"[""Maintainer comment by bluwy classified as upstream_dependency."", ""This seems to be an upstream issue in Rollup. I created an issue there https://github.com/rollup/rollup/issues/5122. Closing this in favour of it as there's not much we can do here. Thanks for the repro!""]",,,,,valid_no_gold,Maintainer created/points to a Rollup upstream issue and closes because Vite cannot fix the transform locally.,,
+abstention_candidate__organic_issue__0ec1b497aea02fc0da793742,vitejs/vite,bf0cd25adb3b8bb5d53433ba9323d0a95e9f756a,issue,"Issue title: RangeError: Maximum call stack size exceeded when a .env file has environment variable with default values
+Issue body excerpt: ### Describe the bug
+
+if you have a .env file in your project and this has  environment  variable with default values, you will get this error
+
+```shell
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯ Unhandled Error ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+RangeError: Maximum call stack size exceeded
+    at RegExp.exec (<anonymous>)
+    at file://test-app/node_modules/vite/dist/node/chunks/dep-e8f070e8.js:36830:54
+    at Array.reduce (<anonymous>)
+    at _interpolate (file://test-app/node_modules/vite/dist/node/chunks/dep-e8f070e8.js:36829:18)
+    at file://test-app/node_modules/vite/dist/node/chunks/dep-e8f070e8.js:36863:15
+    at Array.reduce (<anonymous>)
+    at _interpolate (file://test-app/node_modules/vite/dist/node/chunks/dep-e8f070e8.js:36829:18)
+    at file://test-app/node_modules/vite/dist/node/chunks/dep-e8f070e8.js:36863:15
+    at Array.reduce (<anonymous>)
+    at _interpolate (file://test-app/node_modules/vite/dist/node/chunks/dep-e8f070e8.js:36829:18)
+ ```
+ 
+ 
+ this only happened to me in Linux and my ci with docker, this does not happen on windows (my main machine)
+
+### Reproduction
+
+https://stackblitz.com/edit/vitejs-vite-brtwpg?file=.env
+
+### Steps to reproduce
+
+- create a empty project `npm init -y`
+- install `vite`
+- create a `.env` file with this content
+
+```.env
+MY_SECRET=${MY_SECRET:-}
+```
+- run `npx vite`
+
+
+### System Info
+
+```shell
+System:
+    OS: Linux 5.15 Ubuntu 22.04.2 LTS 22.04.2 LTS (Jammy Jellyfish)
+    CPU: (12) x64 AMD Ryzen 5 5600X 6-Core Processor
+    Memory: 29.10 GB / 31.31 GB
+    Container: Yes
+    Shell: 5.1.16 - /bin/bash
+  Binaries:
+    Node: 18.16.0 - ~/.nvm/versions/node/v18.16.0/bin/node
+    Yarn: 1.22.19 - /mnt/d/programas/nodejs/yarn
+...[truncated]",upstream_dependency,https://github.com/vitejs/vite/issues/13399,"[""Seems like an upstream issue https://github.com/motdotla/dotenv-expand/issues/98""]",,[],Maintainer resolution evidence classifies the issue as no repository-local fix; automatic checks found no issue closing commit event.,"[""Maintainer comment by bluwy classified as upstream_dependency."", ""Seems like an upstream issue https://github.com/motdotla/dotenv-expand/issues/98""]",,,,,valid_no_gold,Maintainer points to dotenv-expand upstream issue for recursive env expansion; no Vite repo-local fix is indicated.,,
+abstention_candidate__organic_issue__11bcc0e476f318c7a7e7e396,caddyserver/caddy,178294e9d70fede4244c3c57313925e0f9a17b4c,issue,"Issue title: reverse_proxy: http transport strips zero'd content-length
+Issue body excerpt: ### Issue Details
+
+*Disclaimer*: I haven't fully narrowed this down to being an issue with Caddy yet, so anyone confirming my findings would be appreciated.
+
+From what it looks like, when presented with an HTTP request (*HEAD* and *GET* were tested) without body, any *content-length* headers set to 0 (zero) are removed.
+This causes issues when operating, say, a Ceph radosgw or other S3 provider when a signed request is sent which includes the *content-length* header in its *SignedHeaders*[^signed-headers].
+With the header removed the signature fails.
+
+[^signed-headers]: e.g. `SignedHeaders=content-length;host;x-amz-content-sha256;x-amz-date`
+
+<details><summary>stripped down configuration</summary>
+
+```caddyfile
+{
+  key_type p384
+  # ACME and TLS config here
+}
+(trusted-headers) {
+  request_header -x-forwarded-for
+  request_header -x-forwarded-proto
+  request_header -forwarded
+}
+example.com {
+  import trusted-headers
+  tls /run/credentials/caddy.service/rgw_cert.pem /run/credentials/caddy.service/rgw_key.pem
+  reverse_proxy [::1]:7480
+}
+https:// {
+  import trusted-headers
+  tls {
+    on_demand
+  }
+  reverse_proxy [::1]:7480 {
+    transport http {
+      compression off # for testing, didn't make a difference
+    }
+  }
+}
+```
+
+</details>
+
+Command used to test:
+
+```bash
+curl --http1.1 -s -o /dev/null -vv -I -H ""Content-Length: 0"" ""https://example.com/my-bucket""
+```
+
+Since I've *tcpdump*'d the traffic on port 7480 (the backend) I am reasonably sure that this does *not* include a *content-length* header in the request to the upstream.
+This also applies to an HTTP/2 downstream connection, however to cut out the magic of HTTP/2 I tried with HTTP/1.1 for the time being.
+
+The full (though censored) request data which is a bit harder to replicate using *curl* is below.
+
+Expected req
+...[truncated]",upstream_dependency,https://github.com/caddyserver/caddy/issues/7295,"[""> Before I do so I have one question which is probably relevant for an upstream bug report; do you by chance know whether this affects only the connection to the upstream, or also the connection to the client (i.e. is the header properly preserved in the request data received by the proxy if the client set it)?\n\nFor http1, yes. As long as `Content-Length` is a valid non-negative number, in fact, stdlib will usually add `Content-Length: 0` if nothing is written at all and this header is not set. stdlib will not report an error if body written is less than declared in the header.\n\nhttps://github.com/golang/go/blob/4837fbe4145cd47b43eed66fee9eed9c2b988316/src/net/http/server.go#L1226-L1229\n\n> I just saw that apparently [_extraHeaders_ could be supplied](https://github.com/golang/go/blob/e5d004c7a8777c8333b965266994a8fd2cd45394/src/net/http/request.go#L720-L725) somewhere (not sure if this is easily accessible from without _stdlib_), could that be used to workaround this?\n\nThis is used exc\n...[truncated]""]",,[],Maintainer resolution evidence classifies the issue as no repository-local fix; automatic checks found no issue closing commit event.,"[""Maintainer comment by WeidiDeng classified as upstream_dependency."", ""> Before I do so I have one question which is probably relevant for an upstream bug report; do you by chance know whether this affects only the connection to the upstream, or also the connection to the client (i.e. is the header properly preserved in the request data received by the proxy if the client set it)?\n\nFor http1, yes. As long as `Content-Length` is a valid non-negative number, in fact, stdlib will usually add `Content-Length: 0` if nothing is written at all and this header is not set. stdlib will not report an error if body written is less than declared in the header.\n\nhttps://github.com/golang/go/blob/4837fbe4145cd47b43eed66fee9eed9c2b988316/src/net/http/server.go#L1226-L1229\n\n> I just saw that apparently [_extraHeaders_ could be supplied](https://github.com/golang/go/blob/e5d004c7a8777c8333b965266994a8fd2cd45394/src/net/http/request.go#L720-L725) somewhere (not sure if this is easily accessible from without _stdlib_), could that be used to workaround this?\n\nThis is used exc\n...[truncated]""]",,,,,valid_no_gold,Maintainer discussion attributes zero Content-Length stripping to Go stdlib behavior; no Caddy repo fix is indicated.,,
+abstention_candidate__organic_issue__741ae868bbb2ce7767c57dcc,caddyserver/caddy,a6d488a15beb01369384e74d0e0159da11272bc3,issue,"Issue title: Can't publish ECH data to cloudflare DNS when SRV records are present
+Issue body excerpt: # Description
+
+When enabling ECH I'm getting the following error:
+
+```json
+{
+  ""level"": ""error"",
+  ""ts"": 1745164590.32397,
+  ""logger"": ""tls"",
+  ""msg"": ""unable to get existing DNS records to publish ECH data to HTTPS DNS record"",
+  ""domain"": ""emilia.codes"",
+  ""error"": ""parsing Cloudflare DNS record {ID:9093409250c4e90bf23a0fe160f0329e Type:SRV Name:_xmpp-client._tcp.emilia.codes Content:5 5222 xmpp.emilia.codes Priority:0 Proxiable:false Proxied:false TTL:1 Locked:false ZoneID: ZoneName: CreatedOn:2024-07-26 00:23:27.641069 +0000 UTC ModifiedOn:2024-07-26 00:23:27.641069 +0000 UTC Data:{LatDegrees:0 LatMinutes:0 LatSeconds:0 LatDirection: LongDegrees:0 LongMinutes:0 LongSeconds:0 LongDirection: Altitude:0 Size:0 PrecisionHorz:0 PrecisionVert:0 Service: Proto: Name: Priority:0 Weight:5 Port:5222 Target:xmpp.emilia.codes Value: Tag: Flags:0 Protocol:0 Algorithm:0 KeyTag:0 DigestType:0 Usage:0 Selector:0 MatchingType:0 Content:} Meta:0xc005fc4e40}: name _xmpp-client._tcp does not contain enough fields; expected format: '_service._proto.name'"",
+}
+```
+
+This is probably something specific to the way cloudflare returns the records. Since editing the record to also include the FQDN, just results in the same record without the FQDN at the end.",upstream_dependency,https://github.com/caddyserver/caddy/issues/6975,"[""I'm mobile right now but this has already been fixed upstream. You can use the patch today by compiling with it, I'll get you an example command soon""]",,[],Maintainer resolution evidence classifies the issue as no repository-local fix; automatic checks found no issue closing commit event.,"[""Maintainer comment by mholt classified as upstream_dependency."", ""I'm mobile right now but this has already been fixed upstream. You can use the patch today by compiling with it, I'll get you an example command soon""]",,,,,valid_no_gold,Maintainer says the Cloudflare DNS/ECH issue was fixed upstream and suggests compiling with upstream patch; no Caddy repo fix.,,
+abstention_candidate__organic_issue__18cab3e5d61345362c67b86b,caddyserver/caddy,54d03ced48a8ed2264ae9248c81f00a1c2648d82,issue,"Issue title: When `resolvers` flag is set : DNS challenge enabled, but no DNS provider configured
+Issue body excerpt: Config:
+
+```
+{
+        servers :443 {
+                strict_sni_host on
+                trusted_proxies static 10.0.0.0/8
+                trusted_proxies_strict
+
+                listener_wrappers {
+                        proxy_protocol {
+                                allow 10.0.0.0/8
+                                fallback_policy reject
+                        }
+                        http_redirect
+                        tls
+                }
+        }
+
+        on_demand_tls {
+                ask http://ask.localhost/check
+        }
+}
+
+# auto_https ""ASK"" Server
+import AllowedTLSDomains
+
+# Parameters
+(server_options) {
+        tls {
+                resolvers 127.0.0.53
+                on_demand
+        }
+}
+
+# Options
+(proxy_options) {
+        reverse_proxy {
+                to {args[0]}
+
+                transport http {
+                        keepalive off
+                        proxy_protocol v2
+                }
+        }
+}
+
+# Common ports (no response)
+:80 {
+        abort
+}
+
+:443 {
+        abort
+}
+
+# Sub-domains
+domain.com,
+*.domain.com {
+        import server_options
+
+        @root host www.domain.com
+        handle @root {
+                redir https://domain.com{uri} 308
+        }
+
+        @public host domain.com public.domain.com
+        handle @public {
+                import proxy_options 100.99.147.68:4443
+        }
+
+        @private host private.domain.com
+        handle @private {
+                import proxy_options 100.65.100.74:443
+        }
+
+        handle {
+                # Deny unhandled sub-domains
+                abort
+        }
+}
+```
+
+This config works fine under 2.9.1, but after update to 2.10.0, it asks fors DNS:
+
+> Error: loading initial config: loading new config: loading http app module: provision http: getting tls app: loading tls app
+...[truncated]",external_service,https://github.com/caddyserver/caddy/issues/6987,"[""I might be misunderstanding, but so far I think this all makes sense:\n\n- Setting `resolvers 127.0.0.53` configures the DNS challenge, which enables it.\n- The error \""DNS challenge enabled, but no DNS provider configured\"" also makes sense, because there is no DNS provider configured. (There should be DNS provider credentials somewhere, but I don't see that in your config.)\n\nIf \""This config works fine under 2.9.1,\"" is true, then that is a bug. Further, how is it possible for it to complete the DNS challenge without a provider configuration? No credentials? Seems impossible to me. The fact that we raise an error now actually seems like correct behavior.""]",,[],Maintainer resolution evidence classifies the issue as no repository-local fix; automatic checks found no issue closing commit event.,"[""Maintainer comment by mholt classified as external_service."", ""I might be misunderstanding, but so far I think this all makes sense:\n\n- Setting `resolvers 127.0.0.53` configures the DNS challenge, which enables it.\n- The error \""DNS challenge enabled, but no DNS provider configured\"" also makes sense, because there is no DNS provider configured. (There should be DNS provider credentials somewhere, but I don't see that in your config.)\n\nIf \""This config works fine under 2.9.1,\"" is true, then that is a bug. Further, how is it possible for it to complete the DNS challenge without a provider configuration? No credentials? Seems impossible to me. The fact that we raise an error now actually seems like correct behavior.""]",,,,,valid_no_gold,Maintainer explains the DNS challenge error is expected when config enables resolvers without DNS provider credentials; no Caddy repo fix is indicated.,,
+abstention_candidate__organic_issue__063154c6714ce9bfefb31c0c,numpy/numpy,b42e4eec3c542e51f2da616913bad98f76328458,issue,"Issue title: `mgrid` with non-integer slices gives error from mypy
+Issue body excerpt: As I was trying out `mgrid` according to the [documentation](https://numpy.org/doc/stable/reference/generated/numpy.mgrid.html#numpy.mgrid), I noticed mypy complained about the complex step number. I also used a float as the `stop` value, which does make sense in the context of `mgrid`, and it gave the same error for that too. 
+
+I couldn't see any other issues regarding this but I was unsure of where to post this so apologies if this is the wrong forum.
+
+### Reproducing code example:
+
+mg.py:
+```python
+import numpy as np
+
+np.mgrid[-1:1:5j]
+```
+
+### Error message:
+
+```
+＞ mypy .
+mg.py:3: error: Slice index must be an integer or None
+```
+
+### NumPy/Python version information:
+
+```
+1.20.3 3.8.6 (default, Oct  8 2020, 14:06:32)
+[Clang 12.0.0 (clang-1200.0.32.2)]
+```
+
+mypy: 0.902
+MacOS 10.15.7",upstream_dependency,https://github.com/numpy/numpy/issues/19282,"[""While this is a valid issue, it is one that can only be fixed upstream in mypy: https://github.com/python/mypy/issues/2410.\nNamely, the integer/None requirement is currently hard-coded by mypy for the explicit slice syntax (`:`).\n\nAs not even `typing.Any` can be indexed with a non-integer-based `slice`, I don't see anything we \ncan do here to fix the issue.\n``` python\nfrom typing import Any\n\nobj: Any\nobj[0:1j]  # error: Slice index must be an integer or None\n```\n\nAs for potential ways to deal with the problem? I can think of a few option:\n* Add a `# type: ignore[misc]` comment.\n* Pre-construct the relevant `slice` instance and then pass it to `np.mgrid`: \n  `slc = slice(-1, 1, 5j); np.mgrid[slc]`\n* EDIT: If the operation is embedded within a function, then I think you might be able to suppress the \n  error via the [`typing.no_type_check`](https://docs.python.org/3/library/typing.html#typing.no_type_check) decorator.""]",,[],Maintainer resolution evidence classifies the issue as no repository-local fix; automatic checks found no issue closing commit event.,"[""Maintainer comment by BvB93 classified as upstream_dependency."", ""While this is a valid issue, it is one that can only be fixed upstream in mypy: https://github.com/python/mypy/issues/2410.\nNamely, the integer/None requirement is currently hard-coded by mypy for the explicit slice syntax (`:`).\n\nAs not even `typing.Any` can be indexed with a non-integer-based `slice`, I don't see anything we \ncan do here to fix the issue.\n``` python\nfrom typing import Any\n\nobj: Any\nobj[0:1j]  # error: Slice index must be an integer or None\n```\n\nAs for potential ways to deal with the problem? I can think of a few option:\n* Add a `# type: ignore[misc]` comment.\n* Pre-construct the relevant `slice` instance and then pass it to `np.mgrid`: \n  `slc = slice(-1, 1, 5j); np.mgrid[slc]`\n* EDIT: If the operation is embedded within a function, then I think you might be able to suppress the \n  error via the [`typing.no_type_check`](https://docs.python.org/3/library/typing.html#typing.no_type_check) decorator.""]",,,,,valid_no_gold,Mypy hard-codes slice-index typing for explicit slice syntax; maintainer says NumPy cannot fix this locally.,,
+abstention_candidate__organic_issue__efc548a363ddd523bdb59a23,numpy/numpy,94f930730c61747a9a0cc889743ce335292c3cb8,issue,"Issue title: Conversion to Boolean with fractions.Fraction and numpy integers
+Issue body excerpt: When defining a Fraction based on a numpy array of integers, the numerator is a numpy integer, which causes problems when converting to bool.
+
+### Reproducing code example:
+
+```python
+import numpy as np
+from fractions import Fraction
+numerators = np.array([4, 3])
+my_fraction = Fraction(numerators[0], 100)
+print(repr(my_fraction))
+print(bool(my_fraction))
+```
+
+In this example ``my_fraction`` is represented as ``Fraction(4, 100)``, and one would expect that it converts to True; but it raises an error instead.
+
+### Error message:
+
+Traceback (most recent call last):
+  File ""main.py"", line 6, in <module>
+    print(bool(my_fraction))
+TypeError: __bool__ should return bool, returned numpy.bool_
+
+### Numpy/Python version information:
+
+Numpy 1.17.2
+Python 3.7.4",upstream_dependency,https://github.com/numpy/numpy/issues/15277,"[""Agreed, this sounds like something that should be fixed upstream in cpython:\n\nhttps://github.com/python/cpython/blob/5b23f7618d434f3000bde482233c8642a6eb2c67/Lib/fractions.py#L648-L650""]",,[],Maintainer resolution evidence classifies the issue as no repository-local fix; automatic checks found no issue closing commit event.,"[""Maintainer comment by eric-wieser classified as upstream_dependency."", ""Agreed, this sounds like something that should be fixed upstream in cpython:\n\nhttps://github.com/python/cpython/blob/5b23f7618d434f3000bde482233c8642a6eb2c67/Lib/fractions.py#L648-L650""]",,,,,valid_no_gold,Maintainer attributes the Fraction bool failure to CPython fractions logic returning a numpy.bool_; no NumPy repo fix is indicated.,,
+abstention_candidate__organic_issue__d53c3e438a28ecedf8d28fc6,numpy/numpy,b3f09c6787e98e57eff303cbb75c3001dd8b0514,issue,"Issue title: ImportError: dlopen failed: cannot locate symbol ""PyExc_ValueError"" on Android Termux
+Issue body excerpt: ### Steps to reproduce:
+
+```shell
+$ apt update
+$ apt install libopenblas ninja patchelf cmake
+$ python -m venv numpy
+$ source numpy/bin/activate
+(numpy) $ pip install git+https://github.com/numpy/numpy
+```
+
+### Error message:
+
+```python
+Python 3.11.6 (main, Oct  4 2023, 09:27:52) [Clang 14.0.7 (https://android.googlesource.com/toolchain/llvm-project 4c603efb0 on linux
+Type ""help"", ""copyright"", ""credits"" or ""license"" for more information.
+>>> import numpy
+Traceback (most recent call last):
+  File ""/data/data/com.termux/files/home/venv/numpy/lib/python3.11/site-packages/numpy/core/__init__.py"", line 24, in <module>
+    from . import multiarray
+  File ""/data/data/com.termux/files/home/venv/numpy/lib/python3.11/site-packages/numpy/core/multiarray.py"", line 10, in <module>
+    from . import overrides
+  File ""/data/data/com.termux/files/home/venv/numpy/lib/python3.11/site-packages/numpy/core/overrides.py"", line 8, in <module>
+    from numpy.core._multiarray_umath import (
+ImportError: dlopen failed: cannot locate symbol ""PyExc_ValueError"" referenced by ""/data/data/com.termux/files/home/venv/numpy/lib/python3.11/site-packages/numpy/core/_multiarray_umath.cpython-311.so""...
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File ""/data/data/com.termux/files/home/venv/numpy/lib/python3.11/site-packages/numpy/__init__.py"", line 114, in <module>
+    from numpy.__config__ import show as show_config
+  File ""/data/data/com.termux/files/home/venv/numpy/lib/python3.11/site-packages/numpy/__config__.py"", line 4, in <module>
+    from numpy.core._multiarray_umath import (
+  File ""/data/data/com.termux/files/home/venv/numpy/lib/python3.11/site-packages/numpy/core/__init__.py"", line 50, in <module>
+    raise ImportError(msg)
+ImportErro
+...[truncated]",upstream_dependency,https://github.com/numpy/numpy/issues/24909,"[""Thanks \n> in CPython's support for Termux\n\nI should have turned that around, given that Termux isn't officially supported by CPython say upstream issues. So, the Python install in Termux should be patching this.""]",,[],Maintainer resolution evidence classifies the issue as no repository-local fix; automatic checks found no issue closing commit event.,"[""Maintainer comment by rgommers classified as upstream_dependency."", ""Thanks \n> in CPython's support for Termux\n\nI should have turned that around, given that Termux isn't officially supported by CPython say upstream issues. So, the Python install in Termux should be patching this.""]",,,,,valid_no_gold,Maintainer points to Termux/CPython support rather than NumPy code; no local fix commit or workaround is present.,,
+abstention_candidate__organic_issue__5199a705d5896e193d71aeb7,pypa/pip,c6dbd1bdc032cf34679c3e632d17613cbfd80027,issue,"Issue title: --ignore-requires-python does not work with pip index versions
+Issue body excerpt: ### Description
+
+I am trying to discover all the versions available in a PyPI index, regardless of the required Python version my pip is using.  Using `--ignore-requires-python`, it does not seem to ignore my currently installed Python version.  Below is an example using the `[python3.8](python:3.8)` container. 
+
+
+
+
+### Expected behavior
+
+`--ignore-requires-python` should ignore the current version that pip is installed with.  
+
+In this case, we should see the version `2.8.0` of torch.
+
+### pip version
+
+25.0.1
+
+### Python version
+
+python3.8
+
+### OS
+
+Ubuntu 20.04
+
+### How to Reproduce
+
+```bash
+root@43c622eea5af:/# pip index versions torch --ignore-requires-python
+WARNING: pip index is currently an experimental command. It may be removed/changed in a future release without prior warning.
+torch (2.4.1)
+Available versions: 2.4.1, 2.4.0, 2.3.1, 2.3.0, 2.2.2, 2.2.1, 2.2.0, 2.1.2, 2.1.1, 2.1.0, 2.0.1, 2.0.0, 1.13.1, 1.13.0, 1.12.1, 1.12.0, 1.11.0, 1.10.2, 1.10.1, 1.10.0, 1.9.1, 1.9.0, 1.8.1, 1.8.0, 1.7.1, 1.7.0, 1.6.0, 1.5.1, 1.5.0, 1.4.0
+```
+
+### Output
+
+```bash
+$ sudo docker run -it python:3.8 bash
+root@43c622eea5af:/# pip install --upgrade pip
+Requirement already satisfied: pip in /usr/local/lib/python3.8/site-packages (23.0.1)
+Collecting pip
+  Downloading pip-25.0.1-py3-none-any.whl (1.8 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.8/1.8 MB 47.2 MB/s eta 0:00:00
+Installing collected packages: pip
+  Attempting uninstall: pip
+    Found existing installation: pip 23.0.1
+    Uninstalling pip-23.0.1:
+      Successfully uninstalled pip-23.0.1
+Successfully installed pip-25.0.1
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager. It is recommended to use a virtual environment instead: https://pip
+...[truncated]",external_service,https://github.com/pypa/pip/issues/13573,"[""I haven't read through the code, but I *think* this option shouldn't be on this command. `--ignore-requires-python` is about verifying against the `Requires-Python` core metadata field, but I don't _think_ `pip index versions` ever reads the core metadata fields. I could be wrong about all of this though, because as I say I haven't read through the code.\n\nAs torch doesn't provide source distributions, I think there will need to be at least one wheel that is valid for the version of Python, and platform, being checked against. You can set the Python version being checked against, e.g.:\n\n```\n$ pip index versions torch --python-version 3.6\ntorch (1.4.0)\nAvailable versions: 1.4.0, 1.3.1, 1.3.0, 1.2.0, 1.1.0, 1.0.1, 1.0.0\n\n$ pip index versions torch --python-version 3.11\ntorch (2.8.0)\nAvailable versions: 2.8.0, 2.7.1, 2.7.0, 2.6.0, 2.5.1, 2.5.0, 2.4.1, 2.4.0, 2.3.1, 2.3.0, 2.2.2, 2.2.1, 2.2.0, 2.1.2, 2.1.1, 2.1.0, 2.0.1, 2.0.0, 1.13.1, 1.13.0\n```\n\n> I am trying to discover all the versions\n...[truncated]""]",,[],Maintainer resolution evidence classifies the issue as no repository-local fix; automatic checks found no issue closing commit event.,"[""Maintainer comment by notatallshaw classified as external_service."", ""I haven't read through the code, but I *think* this option shouldn't be on this command. `--ignore-requires-python` is about verifying against the `Requires-Python` core metadata field, but I don't _think_ `pip index versions` ever reads the core metadata fields. I could be wrong about all of this though, because as I say I haven't read through the code.\n\nAs torch doesn't provide source distributions, I think there will need to be at least one wheel that is valid for the version of Python, and platform, being checked against. You can set the Python version being checked against, e.g.:\n\n```\n$ pip index versions torch --python-version 3.6\ntorch (1.4.0)\nAvailable versions: 1.4.0, 1.3.1, 1.3.0, 1.2.0, 1.1.0, 1.0.1, 1.0.0\n\n$ pip index versions torch --python-version 3.11\ntorch (2.8.0)\nAvailable versions: 2.8.0, 2.7.1, 2.7.0, 2.6.0, 2.5.1, 2.5.0, 2.4.1, 2.4.0, 2.3.1, 2.3.0, 2.2.2, 2.2.1, 2.2.0, 2.1.2, 2.1.1, 2.1.0, 2.0.1, 2.0.0, 1.13.1, 1.13.0\n```\n\n> I am trying to discover all the versions\n...[truncated]""]",,,,,valid_no_gold,Maintainer explains wheel tag and Requires-Python filtering semantics and recommends --python-version/API querying; no pip fix is indicated.,,
+abstention_candidate__organic_issue__941d38befdae387bf76a999d,pypa/pip,0981e071bee8ac3ca2497813fa0863005033c6c2,issue,"Issue title: pip upgrade ignores locally installed Certificate Authorities
+Issue body excerpt: ### Description
+
+`pip install --upgrade pip` ignores locally installes SSL CA
+
+### Expected behavior
+
+After upgrade locally installed certificate authorities should be respected
+
+### pip version
+
+21.2.4
+
+### Python version
+
+3.6
+
+### OS
+
+Linux
+
+### How to Reproduce
+
+Run behind SSL inspection proxy with cetificate installed
+
+Create venv 
+
+    python3 -m venv /tmp/test5
+    source /tmp/test5/bin/activate
+    pip install numpy
+
+Ugrade pip
+
+    pip install --upgrade pip
+    pip install six
+
+
+### Output
+
+```sh-session
+Working outout
+
+
+    Collecting pip
+      Using cached     https://files.pythonhosted.org/packages/ca/31/b88ef447d595963c01060998cb329251648acf4a067721b0452c45527eb8/pip-21.2.4-py3-none-any.whl
+
+
+Failed Output:
+
+    WARNING: Retrying (Retry(total=4, connect=None, read=None, redirect=None, status=None)) after connection broken by 'SSLError(SSLError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed (_ssl.c:852)'),)': /simple/six
+```
+
+
+### Code of Conduct
+
+- [X] I agree to follow the [PSF Code of Conduct](https://www.python.org/psf/conduct/).",external_service,https://github.com/pypa/pip/issues/10548,"[""Pip already provide mechanisms to specify a certificate file anywhere on the system:\n\nhttps://pip.pypa.io/en/stable/cli/pip/#cmdoption-cert\n\nThis can be set with a command argument, or via either a [configuration file or environment variable](https://pip.pypa.io/en/stable/topics/configuration/). Are those methods not viable, and why not?""]",,[],Maintainer resolution evidence classifies the issue as no repository-local fix; automatic checks found no issue closing commit event.,"[""Maintainer comment by uranusjr classified as external_service."", ""Pip already provide mechanisms to specify a certificate file anywhere on the system:\n\nhttps://pip.pypa.io/en/stable/cli/pip/#cmdoption-cert\n\nThis can be set with a command argument, or via either a [configuration file or environment variable](https://pip.pypa.io/en/stable/topics/configuration/). Are those methods not viable, and why not?""]",,,,,valid_no_gold,Maintainer points to existing certificate configuration mechanisms for the local SSL inspection environment; no pip repo change is needed.,,
+abstention_candidate__organic_issue__febc32f4e9dcc0c7cf0422a0,pypa/pip,d05d3c1e97a69cdaf65c787180325fd86dc4f5f8,issue,"Issue title: pip brings harcoded python 3.8 path (doesn't run with any newer python version)
+Issue body excerpt: ### Description
+
+Currently, we're on  python 3.9.7. If you check the install options in the official python installer, it already comes with pip.
+
+The problem is you can't run pip on any fresh install of Python 3.9.x, you'll get the error: 
+
+`Fatal error in launcher: Unable to create process using '""c:\program files\python38\python.exe""  ""C:\Program Files\Python38\Scripts\pip.exe"" --version': The system cannot find the file specified.
+`
+
+As it turns out, the internet (e.g StackOverflow)  is now laden with complaints about this issue. Many people assume it's related to PATH/environment varibles misconfiguration, but it has nothing to do with it.
+
+I was convinced it was some issue with pip itself, because it was looking for the Python 3.8, something I never installed on my PC, as well as it was looking into the path where pip itself was installed.
+
+As it turns out, I opened the pip.exe binary found under  `C:\Program Files\Python38\` in a hex editor, found the aforementioned path there and changed it to my actual Python 3.9 path and now it works as it should.
+
+### Expected behavior
+
+pip should read Python's path from my enviroment variables, rather than bringing a hardcoded Python 3.8 path (which btw isn't even the default Python 3.8 install path)
+
+### pip version
+
+21.2.4
+
+### Python version
+
+3.9.7
+
+### OS
+
+Windows 10 x64 2004
+
+### How to Reproduce
+
+1. Download Python 3.9.x from https://www.python.org/
+2. Install Python 3.9.7
+3. Open cmd/powershell and try invoking the command `pip`
+
+### Output
+
+```sh-session
+Fatal error in launcher: Unable to create process using '""c:\program files\python38\python.exe""  ""C:\Program Files\Python38\Scripts\pip.exe"" --version': The system cannot find the file specified.
+```
+
+
+### Code of Conduct
+
+- [X] I agree to follow the [PSF Code of Con
+...[truncated]",external_service,https://github.com/pypa/pip/issues/10442,"[""You've not given the command you're using to reproduce this bug.\n\nWhat's probably happening is the `pip` on the PATH is in Python 3.8 folder and correctly trying to install in to Python 3.8, where as the `python` on the path is in the Python 3.9 folder. This bad environment setup is pretty common on Windows.\n\nYou should invoke pip like this:\n\n    python -m pip\n\nOr if you have the python launcher installed:\n\n    py -m pip\n\nOr using the python launcher to specify a specific version of Python:\n\n    py -3.9 -m pip\n\nThen run the usual pip arguments afterwards, e.g. `python -m pip install requests`""]",,[],Maintainer resolution evidence classifies the issue as no repository-local fix; automatic checks found no issue closing commit event.,"[""Maintainer comment by notatallshaw classified as external_service."", ""You've not given the command you're using to reproduce this bug.\n\nWhat's probably happening is the `pip` on the PATH is in Python 3.8 folder and correctly trying to install in to Python 3.8, where as the `python` on the path is in the Python 3.9 folder. This bad environment setup is pretty common on Windows.\n\nYou should invoke pip like this:\n\n    python -m pip\n\nOr if you have the python launcher installed:\n\n    py -m pip\n\nOr using the python launcher to specify a specific version of Python:\n\n    py -3.9 -m pip\n\nThen run the usual pip arguments afterwards, e.g. `python -m pip install requests`""]",,,,,valid_no_gold,Maintainer identifies a Windows PATH/environment mismatch and recommends python -m pip/py -m pip; no pip code context is needed.,,
+abstention_candidate__organic_issue__220bd470eb777547fe74e521,pytest-dev/pytest,43d1398fc7f6af7f140afcadf9cccf569dd66ac2,issue,"Issue title: Running each doctest's example as individual test
+Issue body excerpt: I would like to run (and count) each individual example from a `doctest` as an individual test. Now all examples in a single `doctest` fragment are counted as a single test.
+
+Example:
+```python
+# doctests_individual.py
+def foo():
+    """"""
+    >>> 1+1
+    2
+
+    >>> 2+2
+    4
+
+    >>> 3+3
+    6
+    """"""
+    pass
+
+
+def bar():
+    """"""
+    >>> 4+4
+    8
+
+    >>> 5+5
+    10
+
+    >>> 6+6
+    12
+    """"""
+    pass
+```
+
+```
+$ pytest --doctest-modules
+============================================ test session starts =============================================
+platform linux -- Python 3.8.3, pytest-5.4.3, py-1.8.1, pluggy-0.13.1
+rootdir: /home/myuser/example
+plugins: pylint-0.17.0, flake8-1.0.6
+collected 2 items                                                                                            
+
+doctests_individual.py ..                                                                              [100%]
+
+============================================= 2 passed in 0.11s ==============================================
+```
+
+When I make some examples fail in each `doctest` fragment I have no information about passing tests - the message is ""2 failed"", but in fact 3 tests (examples) failed and 3 passed.
+
+```python
+def foo():
+    """"""
+    >>> 1+1
+    20  # this will fail
+
+    >>> 2+2
+    400  # this will fail
+
+    >>> 3+3
+    6
+    """"""
+    pass
+
+
+def bar():
+    """"""
+    >>> 4+4
+    8
+
+    >>> 5+5
+    100  # this will fail
+
+    >>> 6+6
+    12
+    """"""
+    pass
+```
+```
+$ pytest --doctest-modules --doctest-continue-on-failure
+=========================================================== test session starts ============================================================
+platform linux -- Python 3.8.3, pytest-5.4.3, py-1.8.1, pluggy-0.13.1
+rootdir: /home/myuser/example
+plugins: pylint-0.17.0, fla
+...[truncated]",upstream_dependency,https://github.com/pytest-dev/pytest/issues/7339,"[""closing as should be a upstream issue""]",,[],Maintainer resolution evidence classifies the issue as no repository-local fix; automatic checks found no issue closing commit event.,"[""Maintainer comment by RonnyPfannschmidt classified as upstream_dependency."", ""closing as should be a upstream issue""]",,,,,valid_no_gold,Maintainer closes the doctest granularity request as an upstream doctest issue rather than pytest-local work.,,
+abstention_candidate__organic_issue__093e328d39eeef5b83b2e0a9,pytest-dev/pytest,a1208f56319470c2ce37d0a0aa694e4423bed314,issue,"Issue title: Warnings during generating of allure report - RemovedInPytest4Warning
+Issue body excerpt: I updated my pytest to the latest version and started getting an errors during allure report generation.
+However  as I can see, you fully support it with the latest version. 
+
+pip list: 
+package               Version
+--------------------- ---------
+atomicwrites          1.2.1
+attrs                 18.2.0
+certifi               2018.8.24
+chardet               3.0.4
+colorama              0.3.9
+enum34                1.1.6
+idna                  2.7
+lxml                  4.2.5
+more-itertools        4.3.0
+namedlist             1.7
+pip                   10.0.1
+pluggy                0.7.1
+py                    1.6.0
+pytest                3.8.2
+pytest-allure-adaptor 1.7.10
+requests              2.19.1
+setuptools            39.1.0
+six                   1.11.0
+urllib3               1.23
+
+OS: Windows 10 Enterprise x64
+
+Warning example:
+============================== warnings summary ===============================
+C:\Virtual Env\cprw-api-tests\lib\site-packages\allure\utils.py:92: RemovedInPytest4Warning: MarkInfo objects are deprecated as they contain merged marks which are hard to deal with correctly.
+Please use node.get_closest_marker(name) or node.iter_markers(name).
+Docs: https://docs.pytest.org/en/latest/mark.html#updating-code
+  label_name = label_marker.name.split('.', 1)[-1]
+C:\Virtual Env\cprw-api-tests\lib\site-packages\allure\utils.py:93: RemovedInPytest4Warning: MarkInfo objects are deprecated as they contain merged marks which are hard to deal with correctly.
+Please use node.get_closest_marker(name) or node.iter_markers(name).
+Docs: https://docs.pytest.org/en/latest/mark.html#updating-code
+  for label_value in label_marker.args or ():
+C:\Virtual Env\cprw-api-tests\lib\site-packages\allure\utils.py:92: RemovedInPytest4Warning: MarkInfo objects are deprecated as they con
+...[truncated]",upstream_dependency,https://github.com/pytest-dev/pytest/issues/4080,"[""https://github.com/allure-framework/allure-python/blob/master/allure-pytest/src/utils.py#L21 - upstream issue""]",,[],Maintainer resolution evidence classifies the issue as no repository-local fix; automatic checks found no issue closing commit event.,"[""Maintainer comment by RonnyPfannschmidt classified as upstream_dependency."", ""https://github.com/allure-framework/allure-python/blob/master/allure-pytest/src/utils.py#L21 - upstream issue""]",,,,,valid_no_gold,Maintainer points to the third-party allure-pytest adapter using deprecated pytest internals; no pytest fix is indicated.,,
+abstention_candidate__organic_issue__af888e219196eecfb62daeaa,pytest-dev/pytest,5989efe3efec31a9d14f550d89903b6311dfc828,issue,"Issue title: Failed to load plugins when create a virtualenv with --system-site-packages
+Issue body excerpt: <!--
+Thanks for submitting an issue!
+
+Quick check-list while reporting bugs:
+-->
+
+- [x] a detailed description of the bug or problem you are having
+- [ ] output of `pip list` from the virtual environment you are using
+- [x] pytest and operating system versions
+- [x] minimal example if possible
+
+When a virtual environment is created with --system-site-packages, pytest fails to load plugins.
+
+minimal reproducible steps:
+```bash
+virtualenv .venv --system-site-packages
+source .venv/bin/activate
+pip install pytest pytest-benchmark
+pytest --fixtures | grep benchmark || echo $?
+created virtual environment CPython3.10.12.final.0-64 in 1918ms
+  creator CPython3Posix(dest=/home/fengli/test/.venv, clear=False, no_vcs_ignore=False, global=True)
+  seeder FromAppData(download=False, pip=bundle, setuptools=bundle, via=copy, app_data_dir=/home/fengli/.local/share/virtualenv)
+    added seed packages: pip==25.1.1, setuptools==80.9.0
+  activators BashActivator,CShellActivator,FishActivator,NushellActivator,PowerShellActivator,PythonActivator
+Looking in indexes: https://nexus.infra.agibot.com/repository/pypi-proxy/simple, https://nexus.infra.agibot.com/repository/pypi/simple
+Requirement already satisfied: pytest in /home/fengli/.local/lib/python3.10/site-packages (8.1.1)
+Collecting pytest-benchmark
+  Downloading https://nexus.infra.agibot.com/repository/pypi-proxy/packages/pytest-benchmark/5.1.0/pytest_benchmark-5.1.0-py3-none-any.whl (44 kB)
+Requirement already satisfied: iniconfig in /usr/local/lib/python3.10/dist-packages (from pytest) (2.0.0)
+Requirement already satisfied: packaging in /usr/local/lib/python3.10/dist-packages (from pytest) (23.2)
+Requirement already satisfied: pluggy<2.0,>=1.4 in /usr/local/lib/python3.10/dist-packages (from pytest) (1.5.0)
+Requirement already satisfied
+...[truncated]",upstream_dependency,https://github.com/pytest-dev/pytest/issues/13637,"[""Reproduced:\n\n```\n$ pytest --version --version       \nThis is pytest version 8.4.1, imported from /usr/lib/python3.13/site-packages/pytest/__init__.py\nregistered third-party plugins:\n  pytest-asyncio-0.26.0 at /usr/lib/python3.13/site-packages/pytest_asyncio/plugin.py\n  anyio-4.10.0 at /usr/lib/python3.13/site-packages/anyio/pytest_plugin.py\n  pytest-cov-6.1.1 at /usr/lib/python3.13/site-packages/pytest_cov/plugin.py\n```\n\nthough when running with `python -m pytest`, it works fine:\n\n```\n$ python -m pytest --version --version\nThis is pytest version 8.4.1, imported from /usr/lib/python3.13/site-packages/pytest/__init__.py\nregistered third-party plugins:\n  pytest-benchmark-5.1.0 at /home/florian/tmp/13637/.venv/lib/python3.13/site-packages/pytest_benchmark/plugin.py\n  pytest-asyncio-0.26.0 at /usr/lib/python3.13/site-packages/pytest_asyncio/plugin.py\n  anyio-4.10.0 at /usr/lib/python3.13/site-packages/anyio/pytest_plugin.py\n  pytest-cov-6.1.1 at /usr/lib/python3.13/site-packages/pytest_cov/\n...[truncated]""]",,[],Maintainer resolution evidence classifies the issue as no repository-local fix; automatic checks found no issue closing commit event.,"[""Maintainer comment by The-Compiler classified as upstream_dependency."", ""Reproduced:\n\n```\n$ pytest --version --version       \nThis is pytest version 8.4.1, imported from /usr/lib/python3.13/site-packages/pytest/__init__.py\nregistered third-party plugins:\n  pytest-asyncio-0.26.0 at /usr/lib/python3.13/site-packages/pytest_asyncio/plugin.py\n  anyio-4.10.0 at /usr/lib/python3.13/site-packages/anyio/pytest_plugin.py\n  pytest-cov-6.1.1 at /usr/lib/python3.13/site-packages/pytest_cov/plugin.py\n```\n\nthough when running with `python -m pytest`, it works fine:\n\n```\n$ python -m pytest --version --version\nThis is pytest version 8.4.1, imported from /usr/lib/python3.13/site-packages/pytest/__init__.py\nregistered third-party plugins:\n  pytest-benchmark-5.1.0 at /home/florian/tmp/13637/.venv/lib/python3.13/site-packages/pytest_benchmark/plugin.py\n  pytest-asyncio-0.26.0 at /usr/lib/python3.13/site-packages/pytest_asyncio/plugin.py\n  anyio-4.10.0 at /usr/lib/python3.13/site-packages/anyio/pytest_plugin.py\n  pytest-cov-6.1.1 at /usr/lib/python3.13/site-packages/pytest_cov/\n...[truncated]""]",,,,,valid_no_gold,Maintainers explain system-site-packages/entrypoint environment behavior and the reporter closes as not a bug.,,
+abstention_candidate__organic_issue__ae9203cea6992eb83c0babb8,pytest-dev/pytest,f5a9aa0b8409eb70e73ffcca5bd055ad3816c690,issue,"Issue title: pytest fail for interanl package py
+Issue body excerpt: I installed pytest via `pip install pytest` and with the following simple test:
+
+```
+def test_sf_bayer_training(tmpdir):
+    print(tmpdir)
+    _config = TestingTrainerConfigInstance()
+    _config.name = 'test_sf_bayer_training'
+    _config.output_path = tmpdir / _config.name
+    _curr_p = os.getcwd()
+    _config.model_config_path = f'.models/sf.yaml'
+    print(_config)
+    return
+```
+I recieve the following error:
+```
+  File ""/home/davids/venvs/vai/lib/python3.10/site-packages/_pytest/_io/terminalwriter.py"", line 10, in <module>
+    from _pytest.compat import final
+  File ""/home/davids/venvs/vai/lib/python3.10/site-packages/_pytest/compat.py"", line 44, in <module>
+    LEGACY_PATH = py.path. local
+AttributeError: module 'py' has no attribute 'path'
+
+Process finished with exit code 1
+
+```
+
+When I check locally:
+
+```
+(vai) ➜  ~ ipython
+Python 3.10.6 (main, May 29 2023, 11:10:38) [GCC 11.3.0]
+Type 'copyright', 'credits' or 'license' for more information
+IPython 8.8.0 -- An enhanced Interactive Python. Type '?' for help.
+
+In [1]: import py
+
+In [2]: py.path. local
+Out[2]: py._path.local.LocalPath
+
+```
+
+How can I solve the issue with pytest so it can run?
+
+Edit:
+My pytest package:
+
+```
+py==1.11.0
+pytest==7.4.0
+```",upstream_dependency,https://github.com/pytest-dev/pytest/issues/11176,"[""You will need to rename your internal package; the name `py` was taken by a third-party package [way back in 2004](https://docs.pytest.org/en/stable/history.html).""]",,[],Maintainer resolution evidence classifies the issue as no repository-local fix; automatic checks found no issue closing commit event.,"[""Maintainer comment by Zac-HD classified as upstream_dependency."", ""You will need to rename your internal package; the name `py` was taken by a third-party package [way back in 2004](https://docs.pytest.org/en/stable/history.html).""]",,,,,valid_no_gold,Maintainer identifies the user/internal package named py shadowing the established third-party py package.,,
+abstention_candidate__organic_issue__3b6592befbfa43ba7138f4c9,pytest-dev/pytest,2b5adc88a7a83e03bd680d090314ade92602ff8c,issue,"Issue title: singledispatch decorator for test functions
+Issue body excerpt: Hi,
+
+This is a suggestion about a functionality that would be nice to have in pytest. In Python 3, we can overload functions by using the `functools.singledispatch` decorator. It would be nice if something along the lines of 
+
+
+```python
+@pytest.mark.parametrize('x', (1, [2, 3, 4]))
+@functools.singledispatch
+def test_foo(x):
+
+    raise NotImplementedError
+
+@test_foo.register(int)
+def _(x):
+    assert isinstance(x, int)
+@test_foo.register(list)
+def _(x):
+    assert isinstance(x, list)
+```
+
+I don't know if this is possible given the way fixtures work but it would simplify and make the testing code more maintainable. Currently this attempt fails with: 
+
+```python
+Traceback (most recent call last):
+  File ""/home/alex/anaconda3/envs/alibi/lib/python3.7/functools.py"", line 837, in wrapper
+    raise TypeError(f'{funcname} requires at least '
+TypeError: test_foo requires at least 1 positional argument
+```
+
+This suggests that the fixtures aren't treated in the same as positional arguments and that to `functools` the test function appears not to have any arguments.",upstream_dependency,https://github.com/pytest-dev/pytest/issues/6738,"[""Along with \\@asottile's objections, this sounds like a maintainence nightmare to me.  Fixtures are *already* complicated enough to cause a lot of problems (and ~20% of our open issues), and this would add another dimension of cases that everything would need to deal with (parametrize, fixtures, first- and third-party plugins, etc).\n\nSo IMO \""call a function which uses `singledispatch`\"" resolves the issue.""]",,[],Maintainer resolution evidence classifies the issue as no repository-local fix; automatic checks found no issue closing commit event.,"[""Maintainer comment by Zac-HD classified as upstream_dependency."", ""Along with \\@asottile's objections, this sounds like a maintainence nightmare to me.  Fixtures are *already* complicated enough to cause a lot of problems (and ~20% of our open issues), and this would add another dimension of cases that everything would need to deal with (parametrize, fixtures, first- and third-party plugins, etc).\n\nSo IMO \""call a function which uses `singledispatch`\"" resolves the issue.""]",,,,,valid_no_gold,Maintainer rejects singledispatch test support as a maintenance/design issue and recommends calling a singledispatch function instead.,,
+abstention_candidate__organic_issue__4f6de239bec044a00bdd8887,pytest-dev/pytest,4265ab3a41206c5ad40cf711910cf7e8d5286cff,issue,"Issue title: Selectively enable subset of plugins
+Issue body excerpt: Currently, it is possible to disable a plugin by using ``-p no:plugin``. There is however one feature that is missing for us, which is kind of the opposite. I want to disable **all** plugins but few selected.  
+
+E.g. if I'll run ``pytest -p only:plugin1 -p only:plugin2``, the pytest should disable all the plugins except ``plugin1`` and ``plugin2``.  
+
+Our use case is that we have few hosts behind a firewall which makes modules installation very hard. To circumvent it, we have a common directory with pytest and some plugins. In some cases, we want to disable some of them, but since they can be added any time it would be useful to select only the plugins we need and ignore everything else.",external_service,https://github.com/pytest-dev/pytest/issues/5781,"[""but you can also disable internal plugins, where to draw the line?\n\neither way I don't think this is a good idea to implement -- just make another environment without the plugins installed imo""]",,[],Maintainer resolution evidence classifies the issue as no repository-local fix; automatic checks found no issue closing commit event.,"[""Maintainer comment by asottile classified as external_service."", ""but you can also disable internal plugins, where to draw the line?\n\neither way I don't think this is a good idea to implement -- just make another environment without the plugins installed imo""]",,,,,valid_no_gold,Maintainer rejects an allow-only plugin feature and recommends using an environment without unwanted plugins; no pytest repo fix.,,
+abstention_candidate__organic_issue__5013784e701897f60233c4dc,pytest-dev/pytest,978b315861c553618fd7ec813e21f3e3916f0d09,issue,"Issue title: Advice request: monkeypatch vs mock.patch
+Issue body excerpt: I'm working on a codebase where tests use a mixture of `mock.patch` and pytest's `monkeypatch`, seemingly based on authors' personal preferences.
+
+The official docs for the latter, https://docs.pytest.org/en/latest/monkeypatch.html, refer to a blog post that's nearing its 10th anniversary; meanwhile the earlier made it into Python proper.
+
+I wonder if there's official advice, like ""use X"", or perhaps ""if you need feature Y, use Z"" to choose between the two.",external_service,https://github.com/pytest-dev/pytest/issues/4576,"[""I'm not @RonnyPfannschmidt but here is my opinion on why `mock.patch`/`monkeypatch` is *usually* better avoided.\n\nMonkeypatching, by definition, breaks the abstraction barrier. Some code reaches into some other code and changes it bowls. The code calls `some_function()`, but what actually runs is `patched_in_function()`. The trouble with relying on internal details is that it is brittle. If the code is refactored to call `some_other_function()` instead, the test breaks, even if the behavior is exactly the same.\n\nA better alternative is to \""formalize\"" the relationship between the test and the code. The conventional way to do it is give the test explicit control over the particular thing it wants to patch, usually using dependency injection.\n\nFor an example I'll use the [post](https://engineeringblog.yelp.com/2015/02/assert_called_once-threat-or-menace.html) linked by @asottile. In it, they have this code\n\n```py\ndef restart_server(server):\n    ...\n\ndef restart_servers_in_datacenter(serve\n...[truncated]""]",,[],Maintainer resolution evidence classifies the issue as no repository-local fix; automatic checks found no issue closing commit event.,"[""Maintainer comment by bluetech classified as external_service."", ""I'm not @RonnyPfannschmidt but here is my opinion on why `mock.patch`/`monkeypatch` is *usually* better avoided.\n\nMonkeypatching, by definition, breaks the abstraction barrier. Some code reaches into some other code and changes it bowls. The code calls `some_function()`, but what actually runs is `patched_in_function()`. The trouble with relying on internal details is that it is brittle. If the code is refactored to call `some_other_function()` instead, the test breaks, even if the behavior is exactly the same.\n\nA better alternative is to \""formalize\"" the relationship between the test and the code. The conventional way to do it is give the test explicit control over the particular thing it wants to patch, usually using dependency injection.\n\nFor an example I'll use the [post](https://engineeringblog.yelp.com/2015/02/assert_called_once-threat-or-menace.html) linked by @asottile. In it, they have this code\n\n```py\ndef restart_server(server):\n    ...\n\ndef restart_servers_in_datacenter(serve\n...[truncated]""]",,,,,valid_no_gold,"This is an advice/support discussion about monkeypatch versus mock.patch with maintainer guidance, not a needed pytest-local change.",,
+abstention_candidate__organic_issue__632950dac01d29093208378f,pytest-dev/pytest,09d163aa3a1f01701fe2e3f073a89d49b9d0cce2,issue,"Issue title: mock.patch with py2 and p3
+Issue body excerpt: Thanks for submitting an issue!
+
+Here's a quick checklist in what to include:
+- [x] Include a detailed description of the bug or suggestion
+   Im wondering if there is a bug in pytest. I get a exception when i try to rename input or raw input     depending on the python version. 
+- [x] `pip list` of the virtual environment you are using
+  py3
+
+```
+aiohttp (0.21.5)
+apipkg (1.4)
+chardet (2.3.0)
+colorama (0.3.7)
+coverage (4.1)
+curio (0.1)
+enum-compat (0.0.2)
+execnet (1.4.1)
+mock (2.0.0)
+pbr (1.10.0)
+pip (8.1.2)
+py (1.4.31)
+pytest (2.9.2)
+pytest-cov (2.2.1)
+pytest-mock (1.1)
+pytest-xdist (1.14)
+requests (2.9.1)
+setuptools (18.2)
+six (1.10.0)
+tqdm (3.8.0)
+workerpool (0.9.4)
+
+```
+
+py2 list
+
+```
+addict (0.4.0)
+addicted (0.0.5)
+alabaster (0.7.7)
+apipkg (1.4)
+arrow (0.7.0)
+Babel (2.2.0)
+backports-abc (0.4)
+backports.ssl-match-hostname (3.5.0.1)
+beautifulsoup4 (4.4.1)
+blitzdb (0.2.12)
+bottle (0.12.9)
+CacheControl (0.11.6)
+certifi (2016.2.28)
+cffi (1.6.0)
+Cheetah (2.4.4)
+colorama (0.3.7)
+colorconsole (0.7.2)
+CProfileV (1.0.7)
+cryptography (1.3.2)
+decorator (4.0.6)
+doc2md (0.1.0)
+docopt (0.6.2)
+docutils (0.12)
+dpath (1.4.0)
+ecdsa (0.13)
+enum-compat (0.0.2)
+enum34 (1.1.6)
+execnet (1.4.1)
+FormEncode (1.3.0)
+funcsigs (1.0.2)
+functools32 (3.2.3.post2)
+future (0.15.2)
+futures (3.0.3)
+Glances (2.5.1)
+html5lib (0.9999999)
+idna (2.1)
+imdbpie (4.0.2)
+IMDbPY (5.0)
+ipaddress (1.0.16)
+ipykernel (4.3.1)
+ipython (4.1.2)
+ipython-genutils (0.1.0)
+ipywidgets (4.1.1)
+iso8601 (0.1.11)
+Jinja2 (2.8)
+jsonpath-rw (1.4.0)
+jsonrpclib-pelix (0.2.6)
+jsonschema (2.5.1)
+jupyter (1.0.0)
+jupyter-client (4.2.1)
+jupyter-console (4.1.1)
+jupyter-core (4.1.0)
+lifter (0.2.1)
+line-profiler (1.0)
+lockfile (0.12.2)
+lxml (3.5.0)
+m3u8 (0.2.8)
+Markdown (2.6.5)
+MarkupSafe (0.23)
+mistune (0.7.2)
+mock (2.0.0)
+nbconvert (4.1.0)
+...[truncated]",upstream_dependency,https://github.com/pytest-dev/pytest/issues/1598,"[""Thanks for reporting.\n\nI assume if you pass `-s` (`--capture=no`) then the test works, is that right? Currently there's no way to disable capture for a test (there's been some discussion in #167 though).\n\nEither way I think mocking builtins like `open` and `input` are a bad idea in general, as third-party libraries (like pytest) depend on them to work.""]",,[],Maintainer resolution evidence classifies the issue as no repository-local fix; automatic checks found no issue closing commit event.,"[""Maintainer comment by nicoddemus classified as upstream_dependency."", ""Thanks for reporting.\n\nI assume if you pass `-s` (`--capture=no`) then the test works, is that right? Currently there's no way to disable capture for a test (there's been some discussion in #167 though).\n\nEither way I think mocking builtins like `open` and `input` are a bad idea in general, as third-party libraries (like pytest) depend on them to work.""]",,,,,valid_no_gold,Maintainer advises that mocking builtins used by pytest is a bad pattern and notes capture limitations; no local fix is indicated.,,
+abstention_candidate__organic_issue__4aabc3140ee1bde77bf7ee0a,scrapy/scrapy,f6ed5edc31e7cc66225c0860e1534a6230511954,issue,"Issue title: Download delay and concurrent request per IP not respected, potentially due to custom download middleware
+Issue body excerpt: Hi, I have a `settings.py` as below
+
+```
+DOWNLOADER_MIDDLEWARES = {
+    'linked.middlewares.seleniumdownload.MySeleniumDownloadMiddleware': 100,
+}
+
+LOG_LEVEL = 'DEBUG'
+
+# Introduce an artifical delay to make use of parallelism. to speed up the
+# crawl.
+DOWNLOAD_DELAY = 10
+
+CONCURRENT_REQUESTS_PER_IP = 1
+```
+
+And below is my custom download middleware
+
+```
+class MySeleniumDownloadMiddleware:
+    """"""Scrapy middleware handling the requests using selenium""""""
+
+    def __init__(self, driver):
+        self.driver = driver
+        self.cookies = self.driver.get_cookies()
+
+    @classmethod
+    def from_crawler(cls, crawler):
+        """"""Initialize the middleware with the crawler settings""""""
+
+        driver = init_chromium(crawler.settings.get('SELENIUM_HOSTNAME'))
+        login(driver, crawler.settings.get('MY_CREDENTIAL'))
+
+        middleware = cls(driver=driver)
+
+        crawler.signals.connect(middleware.spider_closed, signals.spider_closed)
+
+        return middleware
+
+
+    def process_request(self, request, spider):
+        """"""Process a request using the selenium driver if applicable""""""
+
+        try:
+            self.driver.get(request.url)
+        except WebDriverException:
+            self.driver = init_chromium(spider.settings.get('SELENIUM_HOSTNAME'))
+            recover_cookie_to_driver(self.driver, self.cookies)
+            self.driver.get(request.url)
+
+        body = str.encode(self.driver.page_source)
+
+        # Expose the driver via the ""meta"" attribute
+        request.meta.update({'driver': self.driver})
+
+        return HtmlResponse(
+            self.driver.current_url,
+            body=body,
+            encoding='utf-8',
+            request=request
+        )
+
+
+    def spider_closed(self):
+        """"""Shutdown the driver when spider is closed""""""
+        try:
+...[truncated]",user_error,https://github.com/scrapy/scrapy/issues/4591,"[""I think you would have to make your middleware play with `slots`. See https://stackoverflow.com/questions/55860181/how-download-slot-works-within-scrapy.\n\nIn any case, this is not a bug in Scrapy. Please, use [StackOverflow](https://stackoverflow.com/tags/scrapy) to ask this type of questions. See [Getting Help](https://docs.scrapy.org/en/latest/#getting-help).""]",,[],Maintainer resolution evidence classifies the issue as no repository-local fix; automatic checks found no issue closing commit event.,"[""Maintainer comment by Gallaecio classified as user_error."", ""I think you would have to make your middleware play with `slots`. See https://stackoverflow.com/questions/55860181/how-download-slot-works-within-scrapy.\n\nIn any case, this is not a bug in Scrapy. Please, use [StackOverflow](https://stackoverflow.com/tags/scrapy) to ask this type of questions. See [Getting Help](https://docs.scrapy.org/en/latest/#getting-help).""]",,,,,valid_no_gold,Maintainer explains the custom Selenium middleware must use slots and redirects support to StackOverflow; no Scrapy bug/fix.,,
+abstention_candidate__organic_issue__404255f60c06a89b93f0d78f,vitejs/vite,bb85bd751e4568c707612b708deaba67f8af4ca3,issue,"Issue title: SECURE CONTEXT (https://...) (wss://....) websocket connection failed
+Issue body excerpt: ### Describe the bug
+
+what I'm doing...
+NodeJS version: v22.21.0 -- recently updated and it broke the https://... websocket connection
+run command 
+```vscode terminal
+npm run dev
+```
+I'm using vite.config.js like:
+```vite.config.js
+import glsl from 'vite-plugin-glsl';
+import { defineConfig } from 'vite';
+import { readFileSync } from 'fs';
+
+export default defineConfig({
+  plugins: [ glsl() ],
+  server: {
+      https: {
+          key: readFileSync('C:\\""pathToServerKey""\\server.key'),
+          cert: readFileSync('C:\\""pathToServerCertificate""\\server.crt')
+      }
+  }
+});
+```
+What I expect: local project to open in secure context in chrome browser.
+What I'm getting:
+IN VSCODE TERMINAL: 
+node:_http_server:1076
+                  !!server.shouldUpgradeCallback(req);
+                           ^
+
+TypeError: server.shouldUpgradeCallback is not a function
+    at parserOnIncoming (node:_http_server:1076:28)
+    at HTTPParser.parserOnHeadersComplete (node:_http_common:122:17)
+
+Node.js v22.21.0
+IN CHROME CONSOLE: 
+NAME                              | STATUS  | TYPE          | INITIATOR| SIZE    | TIME
+?token=oV7GSrMGw1kt | Finished | websocket | client:755 | 0.0 kB | Pending
+
+### Reproduction
+
+https://localhost:5173/
+
+### Steps to reproduce
+
+_No response_
+
+### System Info
+
+```shell
+System:
+    OS: Windows 11 10.0.26200
+    CPU: (24) x64 12th Gen Intel(R) Core(TM) i9-12900K
+    Memory: 21.19 GB / 31.70 GB
+  Binaries:
+    Node: 22.21.0 - C:\Program Files\nodejs\node.EXE
+    Yarn: 1.22.22 - C:\Program Files\nodejs\yarn.CMD
+    npm: 11.6.2 - C:\Program Files\nodejs\npm.CMD
+    pnpm: 10.19.0 - C:\Program Files\nodejs\pnpm.CMD
+  Browsers:
+    Chrome: 141.0.7390.123
+    Edge: Chromium (140.0.3485.54)
+    Firefox: 144.0 - C:\Program Files\Mozilla Firefox\firefox.exe
+    Internet Explorer:
+...[truncated]",upstream_dependency,https://github.com/vitejs/vite/issues/21000,"[""It's an upstream issue: https://github.com/nodejs/node/issues/60336""]",,[],Maintainer resolution evidence classifies the issue as no repository-local fix; automatic checks found no issue closing commit event.,"[""Maintainer comment by bluwy classified as upstream_dependency."", ""It's an upstream issue: https://github.com/nodejs/node/issues/60336""]",,,,,valid_no_gold,Maintainer identifies the websocket failure as an upstream Node.js issue; no Vite local fix is indicated.,,
+abstention_candidate__organic_issue__ae191c6cce2da727e58bfca6,vitejs/vite,67e3e9542a35c9ad949651c3faa2f22d2ae50b0c,issue,"Issue title: Some code disappeared when  build library(vite 5.4.10)
+Issue body excerpt: ### Describe the bug
+
+https://github.com/vitejs/vite/issues/7541
+I've already read this issue.
+It's still exists in the new version(vite@5.4.10)
+
+<img width=""1466"" alt=""image"" src=""https://github.com/user-attachments/assets/3a04bed0-665c-4b9d-8996-f5a6c4b81466"">
+<img width=""787"" alt=""image"" src=""https://github.com/user-attachments/assets/3e3c83d7-310e-4248-ae4e-292b465f1bf7"">
+Some code disappeared in the generated file.
+
+There is no problem when using ```tsc``` packaging.
+
+### Reproduction
+
+https://github.com/taofengYang/vite-build
+
+### Steps to reproduce
+
+1. pnpm install
+2. pnpm build
+
+Then the generated file code(dist/test.js) can see that some code is gone.
+
+
+### System Info
+
+```shell
+vite@5.4.10
+pnpm@8.15.8
+rollup@4.24.3
+
+
+```
+
+
+### Used Package Manager
+
+pnpm
+
+### Logs
+
+_No response_
+
+### Validations
+
+- [X] Follow our [Code of Conduct](https://github.com/vitejs/vite/blob/main/CODE_OF_CONDUCT.md)
+- [X] Read the [Contributing Guidelines](https://github.com/vitejs/vite/blob/main/CONTRIBUTING.md).
+- [X] Read the [docs](https://vite.dev/guide).
+- [X] Check that there isn't [already an issue](https://github.com/vitejs/vite/issues) that reports the same bug to avoid creating a duplicate.
+- [X] Make sure this is a Vite issue and not a framework-specific issue. For example, if it's a Vue SFC related bug, it should likely be reported to [vuejs/core](https://github.com/vuejs/core) instead.
+- [X] Check that this is a concrete bug. For Q&A open a [GitHub Discussion](https://github.com/vitejs/vite/discussions) or join our [Discord Chat Server](https://chat.vite.dev/).
+- [X] The provided reproduction is a [minimal reproducible example](https://stackoverflow.com/help/minimal-reproducible-example) of the bug.",upstream_dependency,https://github.com/vitejs/vite/issues/18520,"[""It seems this is an upstream issue.\nI reported upstream: https://github.com/rollup/rollup/issues/5709""]",,[],Maintainer resolution evidence classifies the issue as no repository-local fix; automatic checks found no issue closing commit event.,"[""Maintainer comment by sapphi-red classified as upstream_dependency."", ""It seems this is an upstream issue.\nI reported upstream: https://github.com/rollup/rollup/issues/5709""]",,,,,valid_no_gold,Maintainer reports the library-build code disappearance upstream to Rollup; no Vite local fix is indicated.,,
+abstention_candidate__organic_issue__dfd02644568942d3e9d7b1f8,vitejs/vite,1358a3c75bfa1d6e72aa8d98dd0e1f70662c8056,issue,"Issue title: Vite Rejects Valid Range Request
+Issue body excerpt: ### Describe the bug
+
+When doing a range request on a tiff file, if the bytes request are longer than the length of the file, then a 416 ""Range Not Satisfiable"" error is returned by Vite.
+
+The expected response is that all data within the range is returned, and the response is clipped to the length of the file.
+
+In Chrome, the browser automatically clips the range request to the length of the file. In Firefox, a 416 ""Range Not Satisfiable"" error is returned by Vite.
+
+This is request headers:
+
+```
+GET /asi-AMSR2-s6250-20220820-v5.4.tif HTTP/1.1
+Host: localhost:3000
+User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:106.0) Gecko/20100101 Firefox/106.0
+Accept: */*
+Accept-Language: en-US,en;q=0.5
+Accept-Encoding: gzip, deflate, br, identity
+Referer: http://localhost:3000/
+Range: bytes=40960-350880
+Connection: keep-alive
+Sec-Fetch-Dest: empty
+Sec-Fetch-Mode: cors
+Sec-Fetch-Site: same-origin
+```
+
+
+This is the expected response (e.g. from Apache)
+
+```
+HTTP/1.1 206 Partial Content
+Date: Tue, 01 Nov 2022 03:12:22 GMT
+Server: Apache/2.4.41 (Ubuntu)
+Last-Modified: Tue, 01 Nov 2022 03:12:19 GMT
+ETag: ""41f70-5ec6017907076""
+Accept-Ranges: bytes
+Content-Length: 229232
+Content-Range: bytes 40960-270191/270192
+Keep-Alive: timeout=5, max=98
+Connection: Keep-Alive
+Content-Type: image/tiff
+```
+
+This is the actual response in Firefox
+
+```
+HTTP/1.1 416 Range Not Satisfiable
+Access-Control-Allow-Origin: *
+Content-Range: bytes */270192
+Date: Tue, 01 Nov 2022 03:05:59 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+Content-Length: 0
+```
+
+### Reproduction
+
+https://github.com/anton-seaice/vite-range-requests
+
+### Steps to reproduce
+
+npm install
+npm run dev
+
+Look in the Console or Network tab in Web Developed Tools in Firefox
+
+### System Info
+
+```shell
+System:
+    OS: Linux 5.4 Ubuntu 20.04
+...[truncated]",upstream_dependency,https://github.com/vitejs/vite/issues/10744,"[""Closing as this is a upstream issue. https://github.com/lukeed/sirv/issues/140""]",,[],Maintainer resolution evidence classifies the issue as no repository-local fix; automatic checks found no issue closing commit event.,"[""Maintainer comment by sapphi-red classified as upstream_dependency."", ""Closing as this is a upstream issue. https://github.com/lukeed/sirv/issues/140""]",,,,,valid_no_gold,Maintainer closes the range-request behavior as an upstream sirv issue; no Vite local fix is indicated.,,
+abstention_candidate__organic_issue__a20c1f9a033892b474d86b9f,vitejs/vite,27e28328235d2f5c6a44129a7635b697097ec50a,issue,"Issue title: <script setup> has different behavior between dev and build
+Issue body excerpt: ### Describe the bug
+
+If I define variables in <script setup> they are available inside the options api when working with `npm run dev` but if I run `npm run build` and `npm run preview` those no longer or defined inside options api
+
+### Reproduction
+
+https://stackblitz.com/edit/vitejs-vite-k5wxvd?file=src%2FApp.vue&terminal=dev
+
+### Steps to reproduce
+
+run project with `npm run dev`
+noticed on mounted `count` logs 0
+notice `watchedCount` can watch count and is reactive on page
+
+kill server and run `npm run build` and `npm run preview`
+noticed on mounted `count` logs undefined
+notice `watchedCount` cannot watch `count` and remains 0 when button clicked
+
+### System Info
+
+```shell
+This is running inside stackblitz
+
+  System:
+    OS: Linux 5.0 undefined
+    CPU: (8) x64 Intel(R) Core(TM) i9-9880H CPU @ 2.30GHz
+    Memory: 0 Bytes / 0 Bytes
+    Shell: 1.0 - /bin/jsh
+  Binaries:
+    Node: 16.14.2 - /usr/local/bin/node
+    Yarn: 1.22.19 - /usr/local/bin/yarn
+    npm: 7.17.0 - /usr/local/bin/npm
+  npmPackages:
+    @vitejs/plugin-vue: ^3.1.2 => 3.1.2 
+    vite: ^3.1.6 => 3.1.8
+```
+
+
+### Used Package Manager
+
+npm
+
+### Logs
+
+_No response_
+
+### Validations
+
+- [X] Follow our [Code of Conduct](https://github.com/vitejs/vite/blob/main/CODE_OF_CONDUCT.md)
+- [X] Read the [Contributing Guidelines](https://github.com/vitejs/vite/blob/main/CONTRIBUTING.md).
+- [X] Read the [docs](https://vitejs.dev/guide).
+- [X] Check that there isn't [already an issue](https://github.com/vitejs/vite/issues) that reports the same bug to avoid creating a duplicate.
+- [X] Make sure this is a Vite issue and not a framework-specific issue. For example, if it's a Vue SFC related bug, it should likely be reported to [vuejs/core](https://github.com/vuejs/core) instead.
+- [X] Check that this is a concrete bug. For
+...[truncated]",upstream_dependency,https://github.com/vitejs/vite/issues/10537,"[""This is an upstream issue.\nhttps://github.com/vuejs/core/issues/6248""]",,[],Maintainer resolution evidence classifies the issue as no repository-local fix; automatic checks found no issue closing commit event.,"[""Maintainer comment by sapphi-red classified as upstream_dependency."", ""This is an upstream issue.\nhttps://github.com/vuejs/core/issues/6248""]",,,,,valid_no_gold,Maintainer points to an upstream Vue core issue for script setup behavior differences.,,
+abstention_candidate__organic_issue__c7b2e3b234b2d1d4d2810627,vitejs/vite,45d6797d9e573fe572dfd6d1c337c8c21f4c29a4,issue,"Issue title: Transform failed - Expected "";"" but found ""from""
+Issue body excerpt: ### Describe the bug
+
+Transform failed after running `yarn build`
+
+### Reproduction
+
+https://stackblitz.com/edit/vitejs-vite-dtwytn?terminal=dev
+
+### System Info
+
+```shell
+System:
+    OS: macOS 12.5.1
+    CPU: (8) arm64 Apple M1
+    Memory: 95.75 MB / 16.00 GB
+    Shell: 5.8.1 - /bin/zsh
+  Binaries:
+    Node: 16.13.1 - /usr/local/bin/node
+    Yarn: 1.22.19 - /opt/homebrew/bin/yarn
+    npm: 8.1.2 - /usr/local/bin/npm
+  Browsers:
+    Chrome Canary: 107.0.5260.0
+    Firefox Developer Edition: 104.0
+    Safari: 15.6.1
+  npmPackages:
+    @vitejs/plugin-vue: ^3.0.3 => 3.0.3 
+    vite: ^3.0.9 => 3.0.9
+```
+
+
+### Used Package Manager
+
+yarn
+
+### Logs
+
+<details>
+<summary>Click to expand!</summary>
+
+```shell
+  vite:config bundled config file loaded in 39.53ms +0ms
+  vite:config using resolved config: {
+  vite:config   plugins: [
+  vite:config     'vite:build-metadata',
+  vite:config     'vite:pre-alias',
+  vite:config     'alias',
+  vite:config     'vite:modulepreload-polyfill',
+  vite:config     'vite:resolve',
+  vite:config     'vite:html-inline-proxy',
+  vite:config     'vite:css',
+  vite:config     'vite:esbuild',
+  vite:config     'vite:json',
+  vite:config     'vite:wasm-helper',
+  vite:config     'vite:worker',
+  vite:config     'vite:asset',
+  vite:config     'vite:vue',
+  vite:config     'vite-plugin-checker',
+  vite:config     'vite:wasm-fallback',
+  vite:config     'vite:define',
+  vite:config     'vite:css-post',
+  vite:config     'vite:build-html',
+  vite:config     'vite:worker-import-meta-url',
+  vite:config     'vite:force-systemjs-wrap-complete',
+  vite:config     'vite:watch-package-data',
+  vite:config     'commonjs',
+  vite:config     'vite:data-uri',
+  vite:config     'vite:asset-import-meta-url',
+  vite:config     'vite:dynamic-import-vars',
+  vite:config
+...[truncated]",upstream_dependency,https://github.com/vitejs/vite/issues/9836,"[""This reproduces with [sfc.vuejs.org](https://sfc.vuejs.org/#eNqFVM2O0zAQfpWRT1lokwunkC0gsRJIICGBuGAObjxpvSSOsZ2WVTfvzniStGVB4pBkZvzN+Ju/nMQb5/LDgKIUVai9cRFaZXe3UsQgxUZaYyP6RtUIn3zvApykBeh6je1X1Q5YQoje2B08gh26LXoStn3forIvE7JVW2wXEFuMfvWHHh8cXltGaatiokLXL6QCxsE9pda53kc4weEFqADDYDRJIzS+70CKpEtBEc84j80KjirW+wuKcmdQ3dsQwXGOt3A0cf8WGzW0MWQaG2OR06/4vcluVlMhjC5hsBNAr5Z0Soob8VeUgkzjzTk6diam6BP+LmnZNyLqtIpYXooqxffktLgZa9HzAflSDhmzzC/4yw0Mfa8JN2GMhsdHYmOsG4gOPJ+rlE3xuRZZop3dwO1mdroE5oyyg2r5lDOmnM90cjphUvTlXlLvronXe+oX3h3QRgJlVBeWL8EmWFR+hwmB+SxSN999+fjhfWJ912JHThyfC5j9s2KrOczEKbEY6bmaJFIidq4lR9IAKm0OULcqBJoors/66JVz6Hm4UqYVm6E0miFcWiriYc0XL7aZAJSp9Wk66UOqx5+D8ajBqUgrZOkkfyblZ3oJeP0DHwZHpqsSkblYLua1gbLp/fXNm9NpWigYx6pgaXH4O5lt7zX6dXC0u09dCf0/xzObBV0VV+WTVqzEtFfrTrn8PvSWfiHcVIrDB7Sk5TIz856lxdjH6EJZFKGp04/nPuS93xUk5X6w0XSYY+jWW98fA3oKLMU8WaMYfwOKuZ16).\nSo it's an upstream issue. ~~Please report to [vuejs/core](https://github.com/vuejs/core).~~ https://github.com/vuejs/core/issues/5830\n\nClosing as it\n...[truncated]""]",,[],Maintainer resolution evidence classifies the issue as no repository-local fix; automatic checks found no issue closing commit event.,"[""Maintainer comment by sapphi-red classified as upstream_dependency."", ""This reproduces with [sfc.vuejs.org](https://sfc.vuejs.org/#eNqFVM2O0zAQfpWRT1lokwunkC0gsRJIICGBuGAObjxpvSSOsZ2WVTfvzniStGVB4pBkZvzN+Ju/nMQb5/LDgKIUVai9cRFaZXe3UsQgxUZaYyP6RtUIn3zvApykBeh6je1X1Q5YQoje2B08gh26LXoStn3forIvE7JVW2wXEFuMfvWHHh8cXltGaatiokLXL6QCxsE9pda53kc4weEFqADDYDRJIzS+70CKpEtBEc84j80KjirW+wuKcmdQ3dsQwXGOt3A0cf8WGzW0MWQaG2OR06/4vcluVlMhjC5hsBNAr5Z0Soob8VeUgkzjzTk6diam6BP+LmnZNyLqtIpYXooqxffktLgZa9HzAflSDhmzzC/4yw0Mfa8JN2GMhsdHYmOsG4gOPJ+rlE3xuRZZop3dwO1mdroE5oyyg2r5lDOmnM90cjphUvTlXlLvronXe+oX3h3QRgJlVBeWL8EmWFR+hwmB+SxSN999+fjhfWJ912JHThyfC5j9s2KrOczEKbEY6bmaJFIidq4lR9IAKm0OULcqBJoors/66JVz6Hm4UqYVm6E0miFcWiriYc0XL7aZAJSp9Wk66UOqx5+D8ajBqUgrZOkkfyblZ3oJeP0DHwZHpqsSkblYLua1gbLp/fXNm9NpWigYx6pgaXH4O5lt7zX6dXC0u09dCf0/xzObBV0VV+WTVqzEtFfrTrn8PvSWfiHcVIrDB7Sk5TIz856lxdjH6EJZFKGp04/nPuS93xUk5X6w0XSYY+jWW98fA3oKLMU8WaMYfwOKuZ16).\nSo it's an upstream issue. ~~Please report to [vuejs/core](https://github.com/vuejs/core).~~ https://github.com/vuejs/core/issues/5830\n\nClosing as it\n...[truncated]""]",,,,,valid_no_gold,Maintainer reproduces the transform failure in Vue SFC playground and tracks it as a Vue core upstream issue.,,
+abstention_candidate__organic_issue__102c712bbd249880495c30b6,vitejs/vite,81989bfb32bee3138f406350d518c53b1683919e,issue,"Issue title: vite 开发的server在请求ogv小视频文件(几百KB)时会导致资源加载失败，报错HTTP为416
+Issue body excerpt: ### Describe the bug
+
+vite 开发的server在请求ogv小视频文件(几百KB)时会导致资源加载失败，报错HTTP为416，而build后放到服务器上请求正常，在上传几兆的大文件视频也会正常，不会出现416问题
+
+### Reproduction
+
+https://github.com/woleicom/vite-bug-demo
+
+### System Info
+
+```shell
+Uncaught (in promise) Error: HTTP error 416
+    at XMLHttpRequest.checkOpen (ogv.js:2:91243)
+```
+
+
+### Used Package Manager
+
+yarn
+
+### Logs
+
+_No response_
+
+### Validations
+
+- [X] Follow our [Code of Conduct](https://github.com/vitejs/vite/blob/main/CODE_OF_CONDUCT.md)
+- [X] Read the [Contributing Guidelines](https://github.com/vitejs/vite/blob/main/CONTRIBUTING.md).
+- [X] Read the [docs](https://vitejs.dev/guide).
+- [X] Check that there isn't [already an issue](https://github.com/vitejs/vite/issues) that reports the same bug to avoid creating a duplicate.
+- [X] Make sure this is a Vite issue and not a framework-specific issue. For example, if it's a Vue SFC related bug, it should likely be reported to [vuejs/core](https://github.com/vuejs/core) instead.
+- [X] Check that this is a concrete bug. For Q&A open a [GitHub Discussion](https://github.com/vitejs/vite/discussions) or join our [Discord Chat Server](https://chat.vitejs.dev/).
+- [X] The provided reproduction is a [minimal reproducible example](https://stackoverflow.com/help/minimal-reproducible-example) of the bug.",upstream_dependency,https://github.com/vitejs/vite/issues/9780,"[""Closing as this is a upstream issue. https://github.com/lukeed/sirv/issues/140""]",,[],Maintainer resolution evidence classifies the issue as no repository-local fix; automatic checks found no issue closing commit event.,"[""Maintainer comment by sapphi-red classified as upstream_dependency."", ""Closing as this is a upstream issue. https://github.com/lukeed/sirv/issues/140""]",,,,,valid_no_gold,Maintainer closes the 416 range behavior as the same upstream sirv issue; no Vite local fix is indicated.,,
+abstention_candidate__organic_issue__116552ca61e7162be2065bea,vitejs/vite,de6323f460dd3e7e3edf97443ece2acce6187ea0,issue,"Issue title: Maxiumum call stack on (HMR)
+Issue body excerpt: ### Describe the bug
+
+I reproduced the issue I was facing on a big project. you can find it in the below stackblits
+
+https://stackblitz.com/edit/vitejs-vite-dmbjcj?file=src/App.vue
+
+On first load. the maximum call stack doesn't happen.
+
+However, on change of 'HelloWorld' component e.g. changing counter to a different number.
+HMR executes, and maximum call stack warning shows up on console. 
+
+### Reproduction
+
+https://stackblitz.com/edit/vitejs-vite-dmbjcj?file=src/App.vue
+
+### System Info
+
+```shell
+""@vitejs/plugin-vue"": ""^3.0.3"",
+""typescript"": ""^4.6.4"",
+""vite"": ""^3.0.8"",
+""vue-tsc"": ""^0.40.1""
+```
+
+
+### Used Package Manager
+
+npm
+
+### Logs
+
+_No response_
+
+### Validations
+
+- [X] Follow our [Code of Conduct](https://github.com/vitejs/vite/blob/main/CODE_OF_CONDUCT.md)
+- [X] Read the [Contributing Guidelines](https://github.com/vitejs/vite/blob/main/CONTRIBUTING.md).
+- [X] Read the [docs](https://vitejs.dev/guide).
+- [X] Check that there isn't [already an issue](https://github.com/vitejs/vite/issues) that reports the same bug to avoid creating a duplicate.
+- [X] Make sure this is a Vite issue and not a framework-specific issue. For example, if it's a Vue SFC related bug, it should likely be reported to [vuejs/core](https://github.com/vuejs/core) instead.
+- [X] Check that this is a concrete bug. For Q&A open a [GitHub Discussion](https://github.com/vitejs/vite/discussions) or join our [Discord Chat Server](https://chat.vitejs.dev/).
+- [X] The provided reproduction is a [minimal reproducible example](https://stackoverflow.com/help/minimal-reproducible-example) of the bug.",upstream_dependency,https://github.com/vitejs/vite/issues/9713,"[""Vue plugin is correctly calling `__VUE_HMR_RUNTIME__.reload`. So I guess this is an upstream issue.\nReported: https://github.com/vuejs/core/issues/6930""]",,[],Maintainer resolution evidence classifies the issue as no repository-local fix; automatic checks found no issue closing commit event.,"[""Maintainer comment by sapphi-red classified as upstream_dependency."", ""Vue plugin is correctly calling `__VUE_HMR_RUNTIME__.reload`. So I guess this is an upstream issue.\nReported: https://github.com/vuejs/core/issues/6930""]",,,,,valid_no_gold,Maintainer says the Vue plugin is correctly calling reload and reports the HMR stack issue upstream to Vue core.,,
+abstention_candidate__organic_issue__af7a8789ea2a73fecbf45df2,vitejs/vite,f623ba37dbc517656a7ffb10bc1b3cb221a4bc72,issue,"Issue title: [vue-ts] ts compiler fails when handling input events in dom
+Issue body excerpt: ### Describe the bug
+
+When creating a project with the ""vue-ts"" template, the ts compiler is taking issue with the event-type of input-events.
+
+
+### Reproduction
+
+1) `yarn create @vitejs/app reproduce --template vue-ts`
+2) add `<input type=""text"" @input=""e => $emit('input', e.target.value)"">` somewhere in the template
+3) run `yarn build`
+
+Fails with:
+
+```
+src/components/HelloWorld.vue:3:50 - error TS2531: Object is possibly 'null'.
+
+3   <input type=""text"" @input=""e => $emit('input', e.target.value)"">
+                                                   ~~~~~~~~
+
+src/components/HelloWorld.vue:3:59 - error TS2339: Property 'value' does not exist on type 'EventTarget'.
+
+3   <input type=""text"" @input=""e => $emit('input', e.target.value)"">
+                                                            ~~~~~
+```",upstream_dependency,https://github.com/vitejs/vite/issues/2943,"[""Upstream issue:\nhttps://github.com/johnsoncodehk/volar/issues/222\nhttps://github.com/vuejs/vue-next/issues/1359""]",,[],Maintainer resolution evidence classifies the issue as no repository-local fix; automatic checks found no issue closing commit event.,"[""Maintainer comment by haoqunjiang classified as upstream_dependency."", ""Upstream issue:\nhttps://github.com/johnsoncodehk/volar/issues/222\nhttps://github.com/vuejs/vue-next/issues/1359""]",,,,,valid_no_gold,Maintainer points to upstream Volar/Vue TypeScript handling issues; no Vite local fix is indicated.,,
+abstention__counterfactual__2040138575eea8d2fc4e2a43,huggingface/diffusers,3a4421c89b9ecd8959741c70c6696cb3c844e40f,counterfactual_wrong_repo,"Pr Title: Enable mxfp4 model on CPU
+Pr Body: CPU mxfp4 moe kernel already implemented. Fix the check to enable mxfp4 on CPU.
+
+Waiting for CPU kernel merge and release.
+Changed File Summary: 3 implementation files and 2 existing test files changed within 5 total files.",counterfactual_wrong_repo,https://github.com/huggingface/transformers/pull/43512,[],,[],"Counterfactual wrong-repo sample: this query is derived from a real positive ARB sample (0a4b3f17ec58d3405b1c9a47) in huggingface/transformers, but the candidate corpus is huggingface/diffusers at 3a4421c89b9ecd8959741c70c6696cb3c844e40f. The paired repository shares profile python:ml; source repository paths and repository identity tokens were excluded from the query.",[],0a4b3f17ec58d3405b1c9a47,huggingface/transformers,code2test,python:ml,valid_no_gold,"ML-library counterfactual is plausible, but mxfp4 MOE CPU kernel support is Transformers-specific and no Diffusers local file is necessary.",,
+abstention__counterfactual__0a023b2ca8d655da34f7840d,huggingface/diffusers,3a4421c89b9ecd8959741c70c6696cb3c844e40f,counterfactual_wrong_repo,"Pr Title: [CB] Changes for long generation
+Pr Body: ## Summary                                                     
+                                                                                                                                                                                                                                          
+This PR fixes some issues related to memory to make long generation (16K+) easier.                                                                                                      
+                                                                                                                                                                                                                                          
+  - Fix KV dedup for decode batches (scheduler.py): Decode-only batches don't consume the read_indices cache budget, so don't reject them on that basis. Also gate the decode fast path on max_blocks_per_request > 0 instead of unconditionally enabling it.        
+  - Fix memory estimation (requests.py): Use torch.cuda.mem_get_info instead of device_properties().total_memory, which ignored CUDA [path redacted] overhead (~0.5 GiB) and caused [path redacted]                                        
+  - Raise max_memory_percent default 0.8 → 0.9 (configuration_utils.py): Now safe with the corrected memory accounting above.                                                                                                             
+  - Write-only fast path (cache.py, input_outputs.py, scheduler.py): When a batch has no past-cache reads (pure prefills), skip the index_select read-back, avoid [path redacted] read_index, and return the input KV states directly. Also adjusts the CUDA-graph key to depend on the block-table path rather than max_kv_read > 0.
+  - Two-peak me
+...[truncated]
+Changed File Summary: 7 implementation files and 1 existing test files changed within 8 total files.",counterfactual_wrong_repo,https://github.com/huggingface/transformers/pull/45530,[],,[],"Counterfactual wrong-repo sample: this query is derived from a real positive ARB sample (a4afc36fc4ad65c7596fd5a5) in huggingface/transformers, but the candidate corpus is huggingface/diffusers at 3a4421c89b9ecd8959741c70c6696cb3c844e40f. The paired repository shares profile python:ml; source repository paths and repository identity tokens were excluded from the query.",[],a4afc36fc4ad65c7596fd5a5,huggingface/transformers,code2test,python:ml,valid_no_gold,"Transformers long token-generation memory query is a plausible Python ML counterfactual against Diffusers, with no Diffusers-local file needed.",,
+abstention__counterfactual__cf24599aa557c9b8c46c6089,HypothesisWorks/hypothesis,c1d70b89c5d586660e1b21fdf422a10fd14e9d6c,counterfactual_wrong_repo,"Pr Title: subtests: fix inconcistent handling of non-string messages
+Pr Body: Resolves: #14195
+Changed File Summary: 1 implementation files and 1 existing test files changed within 4 total files.",counterfactual_wrong_repo,https://github.com/pytest-dev/pytest/pull/14196,[],,[],"Counterfactual wrong-repo sample: this query is derived from a real positive ARB sample (5a834c2130d04105906a9240) in pytest-dev/pytest, but the candidate corpus is HypothesisWorks/hypothesis at c1d70b89c5d586660e1b21fdf422a10fd14e9d6c. The paired repository shares profile python:testing; source repository paths and repository identity tokens were excluded from the query.",[],5a834c2130d04105906a9240,pytest-dev/pytest,code2test,python:testing,valid_no_gold,"Testing-domain counterfactual is plausible, but Hypothesis has no local subtests implementation to inspect for this pytest change.",,
+abstention__counterfactual__bed8b38b3946dfc7991953b5,tox-dev/tox,16df4d8d54d75b673482ab6021e5aaa3b2d0152a,counterfactual_wrong_repo,"Pr Title: subtests: fix inconcistent handling of non-string messages
+Pr Body: Resolves: #14195
+Changed File Summary: 1 implementation files and 1 existing test files changed within 4 total files.",counterfactual_wrong_repo,https://github.com/pytest-dev/pytest/pull/14196,[],,[],"Counterfactual wrong-repo sample: this query is derived from a real positive ARB sample (5a834c2130d04105906a9240) in pytest-dev/pytest, but the candidate corpus is tox-dev/tox at 16df4d8d54d75b673482ab6021e5aaa3b2d0152a. The paired repository shares profile python:testing; source repository paths and repository identity tokens were excluded from the query.",[],5a834c2130d04105906a9240,pytest-dev/pytest,code2test,python:testing,valid_no_gold,"Testing-tool counterfactual is plausible, but tox does not own pytest subtest message handling; no target-local file is necessary.",,
+abstention__counterfactual__139c4f9abe80ae4c8f918957,pytest-dev/pytest,c26c145e0fcef51426d64a184d0faa651777f86f,counterfactual_wrong_repo,"Pr Title: Print the seed when shrinking is slow
+Review Comment: let's add an assertion that `seed` appears *exactly* once in the output, to check that we are not double-adding a message about seeds once we move the logic for that internally.",counterfactual_wrong_repo,https://github.com/HypothesisWorks/hypothesis/pull/4677,[],,[],"Counterfactual wrong-repo sample: this query is derived from a real positive ARB sample (bf47308900fafdff5ca96ecd) in HypothesisWorks/hypothesis, but the candidate corpus is pytest-dev/pytest at c26c145e0fcef51426d64a184d0faa651777f86f. The paired repository shares profile python:testing; source repository paths and repository identity tokens were excluded from the query.",[],bf47308900fafdff5ca96ecd,HypothesisWorks/hypothesis,comment2context,python:testing,valid_no_gold,"Seed/output assertion is plausible in a testing framework, but pytest has no Hypothesis shrinking implementation that would be necessary context.",,
+abstention__counterfactual__52c722e5a2c0c925f7d0ac37,vitejs/vite,5ba688bc422c54944bc6fc563bfe1ba2616a0911,counterfactual_wrong_repo,"Pr Title: chore(cli): mirror cli-daemon spawn pattern in `cli show`
+Review Comment: Why don't we destroy stdin here as well?",counterfactual_wrong_repo,https://github.com/microsoft/playwright/pull/40770,[],,[],"Counterfactual wrong-repo sample: this query is derived from a real positive ARB sample (2f39489dd27f283deb0f7fae) in microsoft/playwright, but the candidate corpus is vitejs/vite at 5ba688bc422c54944bc6fc563bfe1ba2616a0911. The paired repository shares profile javascript:testing; source repository paths and repository identity tokens were excluded from the query.",[],2f39489dd27f283deb0f7fae,microsoft/playwright,comment2context,javascript:testing,valid_no_gold,JavaScript CLI stdin/spawn question is plausibly similar enough for Vite but source-specific Playwright context is absent from the wrong repo.,,
+abstention__counterfactual__4ceb7bf8e03ad19cf5db44ef,ipython/ipython,79f313ab453f82d231ba7ac2c1e5211e71d612ce,counterfactual_wrong_repo,"Failure Excerpt: $ python -m venv .arb-venv
+...
+fault, show_default=True)
+        def cli_with_choices(g):
+            pass
+    
+        # Check that the default value is kept normalized to the type of the choice.
+        assert cli_with_choices.params[0].default == default
+    
+        result = runner.invoke(cli_with_choices, [""--help""])
+        extra_usage = f""[default: {default_string}]""
+        if default_string is None:
+            assert extra_usage not in result.output
+        else:
+>           assert extra_usage in result.output
+E           AssertionError: assert '[default: GREEN]' in 'Usage: cli-with-choices [OPTIONS]\n\nOptions:\n  -g [RED|GREEN|BLUE]  [default: 2]\n  --help               Show this message and exit.\n'
+E            +  where 'Usage: cli-with-choices [OPTIONS]\n\nOptions:\n  -g [RED|GREEN|BLUE]  [default: 2]\n  --help               Show this message and exit.\n' = <Result okay>.output
+
+ [path redacted]:1422: AssertionError
+=========================== short test summary info ============================
+FAILED [path redacted]::test_choice_default_rendering[HashType-HashType.SHA1-SHA1]
+FAILED [path redacted]::test_choice_default_rendering[Number-2-TWO] - A...
+FAILED [path redacted]::test_choice_default_rendering[Letter-b-B] - Ass...
+FAILED [path redacted]::test_choice_default_rendering[Color-Color.GREEN-GREEN]
+FAILED [path redacted]::test_choice_default_rendering[ColorInt-2-GREEN]
+======================== 5 failed, 295 passed in 0.53s =========================",counterfactual_wrong_repo,https://github.com/pallets/click/pull/3004,,,,,,8882930f15d1cd0966e4ff81,pallets/click,trace2code,python:cli,valid_no_gold,"Python CLI trace is plausible in IPython, but Choice/default help rendering is Click-specific and no IPython file is necessary.",,"Counterfactual wrong-repo sample: this query is derived from a real positive ARB sample (8882930f15d1cd0966e4ff81) in pallets/click, but the candidate corpus is ipython/ipython at 79f313ab453f82d231ba7ac2c1e5211e71d612ce. The paired repository shares profile python:cli; source repository paths and repository identity tokens were excluded from the query."
+abstention__counterfactual__54e7cc1417c70e81391e2f28,pypa/pip,b97708aadb64c9f07497f964bb32eb4df0fa2a30,counterfactual_wrong_repo,"Failure Excerpt: $ python -m venv .arb-venv
+...
+ prompt else ""Flag: ""
+    
+                # Add the user input to the expected output.
+                assert isinstance(input, str)
+                expected_output += f""{expected_prompt}{input}\n""
+    
+                if expected is INVALID:
+                    expected_output += ""Error: invalid input\n""
+    
+                # The prompt is expected to be repeated.
+                if expected in (REPEAT, INVALID):
+                    expected_output += expected_prompt
+    
+            if expected not in (REPEAT, INVALID):
+                expected_output += f""{expected!r}\n""
+    
+>           assert result.output == expected_output
+E           AssertionError: assert 'Flag [y/N]: n\nFalse\n' == 'Flag [Y/n]: n\nFalse\n'
+E             
+E             - Flag [Y/n]: n
+E             ?       ^ ^
+E             + Flag [y/N]: n
+E             ?       ^ ^
+E               False
+
+ [path redacted]:935: AssertionError
+=========================== short test summary info ============================
+FAILED [path redacted]::test_flag_value_and_default[opt_params49-args49-True]
+FAILED [path redacted]::test_flag_value_prompt[--flag-opt_params60-args60-[Y/n]--True]
+FAILED [path redacted]::test_flag_value_prompt[--flag-opt_params61-args61-[Y/n]-y-True]
+FAILED [path redacted]::test_flag_value_prompt[--flag-opt_params62-args62-[Y/n]-n-False]
+================== 4 failed, 732 passed, 23 skipped in 1.08s ===================",counterfactual_wrong_repo,https://github.com/pallets/click/pull/3239,,,,,,a4218c7e484b796962f32982,pallets/click,trace2code,python:cli,valid_no_gold,"Python CLI prompt trace is plausible for pip, but boolean flag prompt default rendering is Click-specific and no pip local file is necessary.",,"Counterfactual wrong-repo sample: this query is derived from a real positive ARB sample (a4218c7e484b796962f32982) in pallets/click, but the candidate corpus is pypa/pip at b97708aadb64c9f07497f964bb32eb4df0fa2a30. The paired repository shares profile python:cli; source repository paths and repository identity tokens were excluded from the query."
+abstention__counterfactual__f35b21d3cb618817122ba055,pytest-dev/pytest,0c80a1c836616b0206a4af2fe72001ff797a5f8f,counterfactual_wrong_repo,"Failure Excerpt: $ python -m venv .arb-venv
+...
+ prompt else ""Flag: ""
+    
+                # Add the user input to the expected output.
+                assert isinstance(input, str)
+                expected_output += f""{expected_prompt}{input}\n""
+    
+                if expected is INVALID:
+                    expected_output += ""Error: invalid input\n""
+    
+                # The prompt is expected to be repeated.
+                if expected in (REPEAT, INVALID):
+                    expected_output += expected_prompt
+    
+            if expected not in (REPEAT, INVALID):
+                expected_output += f""{expected!r}\n""
+    
+>           assert result.output == expected_output
+E           AssertionError: assert 'Flag [y/N]: n\nFalse\n' == 'Flag [Y/n]: n\nFalse\n'
+E             
+E             - Flag [Y/n]: n
+E             ?       ^ ^
+E             + Flag [y/N]: n
+E             ?       ^ ^
+E               False
+
+ [path redacted]:935: AssertionError
+=========================== short test summary info ============================
+FAILED [path redacted]::test_flag_value_and_default[opt_params49-args49-True]
+FAILED [path redacted]::test_flag_value_prompt[--flag-opt_params60-args60-[Y/n]--True]
+FAILED [path redacted]::test_flag_value_prompt[--flag-opt_params61-args61-[Y/n]-y-True]
+FAILED [path redacted]::test_flag_value_prompt[--flag-opt_params62-args62-[Y/n]-n-False]
+================== 4 failed, 732 passed, 23 skipped in 1.08s ===================",counterfactual_wrong_repo,https://github.com/pallets/click/pull/3239,,,,,,a4218c7e484b796962f32982,pallets/click,trace2code,python:cli,valid_no_gold,"pytest is a Python CLI/testing tool, but Click prompt default rendering is not pytest-local context.",,"Counterfactual wrong-repo sample: this query is derived from a real positive ARB sample (a4218c7e484b796962f32982) in pallets/click, but the candidate corpus is pytest-dev/pytest at 0c80a1c836616b0206a4af2fe72001ff797a5f8f. The paired repository shares profile python:cli; source repository paths and repository identity tokens were excluded from the query."
+abstention__counterfactual__80dedb6db83159610ec4e590,ipython/ipython,79f313ab453f82d231ba7ac2c1e5211e71d612ce,counterfactual_wrong_repo,"Failure Excerpt: $ python -m venv .arb-venv
+...
+ prompt else ""Flag: ""
+    
+                # Add the user input to the expected output.
+                assert isinstance(input, str)
+                expected_output += f""{expected_prompt}{input}\n""
+    
+                if expected is INVALID:
+                    expected_output += ""Error: invalid input\n""
+    
+                # The prompt is expected to be repeated.
+                if expected in (REPEAT, INVALID):
+                    expected_output += expected_prompt
+    
+            if expected not in (REPEAT, INVALID):
+                expected_output += f""{expected!r}\n""
+    
+>           assert result.output == expected_output
+E           AssertionError: assert 'Flag [y/N]: n\nFalse\n' == 'Flag [Y/n]: n\nFalse\n'
+E             
+E             - Flag [Y/n]: n
+E             ?       ^ ^
+E             + Flag [y/N]: n
+E             ?       ^ ^
+E               False
+
+ [path redacted]:935: AssertionError
+=========================== short test summary info ============================
+FAILED [path redacted]::test_flag_value_and_default[opt_params49-args49-True]
+FAILED [path redacted]::test_flag_value_prompt[--flag-opt_params60-args60-[Y/n]--True]
+FAILED [path redacted]::test_flag_value_prompt[--flag-opt_params61-args61-[Y/n]-y-True]
+FAILED [path redacted]::test_flag_value_prompt[--flag-opt_params62-args62-[Y/n]-n-False]
+================== 4 failed, 732 passed, 23 skipped in 1.08s ===================",counterfactual_wrong_repo,https://github.com/pallets/click/pull/3239,,,,,,a4218c7e484b796962f32982,pallets/click,trace2code,python:cli,valid_no_gold,"IPython has interactive CLI behavior, but this flag prompt y/N rendering failure belongs to Click and has no IPython-local fix context.",,"Counterfactual wrong-repo sample: this query is derived from a real positive ARB sample (a4218c7e484b796962f32982) in pallets/click, but the candidate corpus is ipython/ipython at 79f313ab453f82d231ba7ac2c1e5211e71d612ce. The paired repository shares profile python:cli; source repository paths and repository identity tokens were excluded from the query."
+abstention__counterfactual__b77453bb3b2bc2bf3f97fa55,pytest-dev/pytest,7bc02cca0dd92ec505b4556c054b4e06e9cb8d4d,counterfactual_wrong_repo,"Failure Excerpt: $ python -m venv .arb-venv
+...
+ [path redacted]\\ [path redacted]"",
+                [""f.txt""],
+                [""/Applications/Sublime [path redacted]"", ""f.txt""],
+                id=""escaped space in unix path (issue 1026)"",
+            ),
+        ],
+    )
+    def test_editor_path_normalization(editor_cmd, filenames, expected_args):
+        with patch(""subprocess.Popen"") as mock_popen:
+            mock_popen.return_value.wait.return_value = 0
+            Editor(editor=editor_cmd).edit_files(filenames)
+    
+            mock_popen.assert_called_once()
+            args = mock_popen.call_args[1].get(""args"") or mock_popen.call_args[0][0]
+>           assert args == expected_args
+E           assert '/Applications/Sublime\\ [path redacted] ""f.txt""' == ['/Applications/Sublime [path redacted]', 'f.txt']
+
+ [path redacted]:468: AssertionError
+=========================== short test summary info ============================
+FAILED [path redacted]::test_editor_path_normalization[editor with args]
+FAILED [path redacted]::test_editor_path_normalization[shell metacharacters in filename]
+FAILED [path redacted]::test_editor_path_normalization[quoted windows path with spaces (issue 1026)]
+FAILED [path redacted]::test_editor_path_normalization[command with flags (pr 1477)]
+FAILED [path redacted]::test_editor_path_normalization[quoted command with args (issue 1026)]
+FAILED [path redacted]::test_editor_path_normalization[unix absolute path]
+FAILED [path redacted]::test_editor_path_normalization[escaped space in unix path (issue 1026)]
+================== 7 failed, 150 passed, 23 skipped in 0.35s ===================",counterfactual_wrong_repo,https://github.com/pallets/click/pull/3245,,,,,,e7f9f3fc7342903c89bfb775,pallets/click,trace2code,python:cli,valid_no_gold,"pytest can launch subprocesses in tests, but editor command path normalization is Click utility behavior, not pytest local context.",,"Counterfactual wrong-repo sample: this query is derived from a real positive ARB sample (e7f9f3fc7342903c89bfb775) in pallets/click, but the candidate corpus is pytest-dev/pytest at 7bc02cca0dd92ec505b4556c054b4e06e9cb8d4d. The paired repository shares profile python:cli; source repository paths and repository identity tokens were excluded from the query."
+abstention__counterfactual__887e2bc3077ccf930db971e4,pypa/pip,768810ea6d01c9edc3dd21bf5a69a89d80849c59,counterfactual_wrong_repo,"Failure Excerpt: $ python -m venv .arb-venv
+...
+ [path redacted]\\ [path redacted]"",
+                [""f.txt""],
+                [""/Applications/Sublime [path redacted]"", ""f.txt""],
+                id=""escaped space in unix path (issue 1026)"",
+            ),
+        ],
+    )
+    def test_editor_path_normalization(editor_cmd, filenames, expected_args):
+        with patch(""subprocess.Popen"") as mock_popen:
+            mock_popen.return_value.wait.return_value = 0
+            Editor(editor=editor_cmd).edit_files(filenames)
+    
+            mock_popen.assert_called_once()
+            args = mock_popen.call_args[1].get(""args"") or mock_popen.call_args[0][0]
+>           assert args == expected_args
+E           assert '/Applications/Sublime\\ [path redacted] ""f.txt""' == ['/Applications/Sublime [path redacted]', 'f.txt']
+
+ [path redacted]:468: AssertionError
+=========================== short test summary info ============================
+FAILED [path redacted]::test_editor_path_normalization[editor with args]
+FAILED [path redacted]::test_editor_path_normalization[shell metacharacters in filename]
+FAILED [path redacted]::test_editor_path_normalization[quoted windows path with spaces (issue 1026)]
+FAILED [path redacted]::test_editor_path_normalization[command with flags (pr 1477)]
+FAILED [path redacted]::test_editor_path_normalization[quoted command with args (issue 1026)]
+FAILED [path redacted]::test_editor_path_normalization[unix absolute path]
+FAILED [path redacted]::test_editor_path_normalization[escaped space in unix path (issue 1026)]
+================== 7 failed, 150 passed, 23 skipped in 0.35s ===================",counterfactual_wrong_repo,https://github.com/pallets/click/pull/3245,,,,,,e7f9f3fc7342903c89bfb775,pallets/click,trace2code,python:cli,valid_no_gold,"pip is a Python CLI, but editor path normalization in Click testing is not pip-local context.",,"Counterfactual wrong-repo sample: this query is derived from a real positive ARB sample (e7f9f3fc7342903c89bfb775) in pallets/click, but the candidate corpus is pypa/pip at 768810ea6d01c9edc3dd21bf5a69a89d80849c59. The paired repository shares profile python:cli; source repository paths and repository identity tokens were excluded from the query."
+abstention__counterfactual__5b5a158fedb28575b7d545e1,HypothesisWorks/hypothesis,84f92dcf29229e37f822ba3ba5eea4212d2abf35,counterfactual_wrong_repo,"Failure Excerpt: $ python -m venv .arb-venv
+...
+fault, show_default=True)
+        def cli_with_choices(g):
+            pass
+    
+        # Check that the default value is kept normalized to the type of the choice.
+        assert cli_with_choices.params[0].default == default
+    
+        result = runner.invoke(cli_with_choices, [""--help""])
+        extra_usage = f""[default: {default_string}]""
+        if default_string is None:
+            assert extra_usage not in result.output
+        else:
+>           assert extra_usage in result.output
+E           AssertionError: assert '[default: GREEN]' in 'Usage: cli-with-choices [OPTIONS]\n\nOptions:\n  -g [RED|GREEN|BLUE]  [default: 2]\n  --help               Show this message and exit.\n'
+E            +  where 'Usage: cli-with-choices [OPTIONS]\n\nOptions:\n  -g [RED|GREEN|BLUE]  [default: 2]\n  --help               Show this message and exit.\n' = <Result okay>.output
+
+ [path redacted]:1422: AssertionError
+=========================== short test summary info ============================
+FAILED [path redacted]::test_choice_default_rendering[HashType-HashType.SHA1-SHA1]
+FAILED [path redacted]::test_choice_default_rendering[Number-2-TWO] - A...
+FAILED [path redacted]::test_choice_default_rendering[Letter-b-B] - Ass...
+FAILED [path redacted]::test_choice_default_rendering[Color-Color.GREEN-GREEN]
+FAILED [path redacted]::test_choice_default_rendering[ColorInt-2-GREEN]
+======================== 5 failed, 295 passed in 0.53s =========================",counterfactual_wrong_repo,https://github.com/pallets/click/pull/3004,,,,,,8882930f15d1cd0966e4ff81,pallets/click,trace2code,python:cli,valid_no_gold,"Hypothesis is a Python testing project, but CLI choice default help rendering is Click-specific and no Hypothesis file is necessary.",,"Counterfactual wrong-repo sample: this query is derived from a real positive ARB sample (8882930f15d1cd0966e4ff81) in pallets/click, but the candidate corpus is HypothesisWorks/hypothesis at 84f92dcf29229e37f822ba3ba5eea4212d2abf35. The paired repository shares profile python:cli; source repository paths and repository identity tokens were excluded from the query."
+abstention__counterfactual__40ffeacfe902e3937aafe1ec,HypothesisWorks/hypothesis,c1d70b89c5d586660e1b21fdf422a10fd14e9d6c,counterfactual_wrong_repo,"Pr Title: Add `--max-warnings` option to fail test runs
+Review Comment: Could you please also add some tests with configurations that filter warnings, together with the new --max-warnings option? This will capture the current behavior and ensure we do not regress in the future.",counterfactual_wrong_repo,https://github.com/pytest-dev/pytest/pull/14372,,,,,,a5ef6228e76da22ccdcf6687,pytest-dev/pytest,comment2context,python:testing,valid_no_gold,"Testing-domain counterfactual is plausible, but pytest --max-warnings behavior is not implemented in Hypothesis.",,"Counterfactual wrong-repo sample: this query is derived from a real positive ARB sample (a5ef6228e76da22ccdcf6687) in pytest-dev/pytest, but the candidate corpus is HypothesisWorks/hypothesis at c1d70b89c5d586660e1b21fdf422a10fd14e9d6c. The paired repository shares profile python:testing; source repository paths and repository identity tokens were excluded from the query."
+abstention__counterfactual__95ff8db4017fa62a3146a288,tox-dev/tox,16df4d8d54d75b673482ab6021e5aaa3b2d0152a,counterfactual_wrong_repo,"Pr Title: Add `--max-warnings` option to fail test runs
+Review Comment: Could you please also add some tests with configurations that filter warnings, together with the new --max-warnings option? This will capture the current behavior and ensure we do not regress in the future.",counterfactual_wrong_repo,https://github.com/pytest-dev/pytest/pull/14372,,,,,,a5ef6228e76da22ccdcf6687,pytest-dev/pytest,comment2context,python:testing,valid_no_gold,"tox is a testing workflow tool, but pytest warning-filter and --max-warnings behavior is not tox-local context.",,"Counterfactual wrong-repo sample: this query is derived from a real positive ARB sample (a5ef6228e76da22ccdcf6687) in pytest-dev/pytest, but the candidate corpus is tox-dev/tox at 16df4d8d54d75b673482ab6021e5aaa3b2d0152a. The paired repository shares profile python:testing; source repository paths and repository identity tokens were excluded from the query."
+abstention__counterfactual__9805f3f0620c4c7ac6d80877,tox-dev/tox,16df4d8d54d75b673482ab6021e5aaa3b2d0152a,counterfactual_wrong_repo,"Pr Title: Print the seed when shrinking is slow
+Review Comment: let's add an assertion that `seed` appears *exactly* once in the output, to check that we are not double-adding a message about seeds once we move the logic for that internally.",counterfactual_wrong_repo,https://github.com/HypothesisWorks/hypothesis/pull/4677,,,,,,bf47308900fafdff5ca96ecd,HypothesisWorks/hypothesis,comment2context,python:testing,valid_no_gold,"Testing-domain counterfactual is plausible, but Hypothesis shrinking seed output is not tox-local context.",,"Counterfactual wrong-repo sample: this query is derived from a real positive ARB sample (bf47308900fafdff5ca96ecd) in HypothesisWorks/hypothesis, but the candidate corpus is tox-dev/tox at 16df4d8d54d75b673482ab6021e5aaa3b2d0152a. The paired repository shares profile python:testing; source repository paths and repository identity tokens were excluded from the query."
+abstention__counterfactual__20eb8b8f145a2d0f8570b1bd,pytest-dev/pytest,8ecf49ec2807768105b05dda5461b28cdad89d03,counterfactual_wrong_repo,"Pr Title: feat(config): Allow ranges in envlist
+Review Comment: FWIW you no longer needs to add py and can include the `.` nowadays. E.g. `3.{13-9}` is valid. Probably should add a test for that too.",counterfactual_wrong_repo,https://github.com/tox-dev/tox/pull/3503,,,,,,3e3c5349d79cbfd3366c746f,tox-dev/tox,comment2context,python:testing,valid_no_gold,"pytest is a testing tool, but tox envlist range syntax is not pytest-local behavior.",,"Counterfactual wrong-repo sample: this query is derived from a real positive ARB sample (3e3c5349d79cbfd3366c746f) in tox-dev/tox, but the candidate corpus is pytest-dev/pytest at 8ecf49ec2807768105b05dda5461b28cdad89d03. The paired repository shares profile python:testing; source repository paths and repository identity tokens were excluded from the query."
+abstention__counterfactual__49ec5da10478a184ad8d82e8,HypothesisWorks/hypothesis,c1d70b89c5d586660e1b21fdf422a10fd14e9d6c,counterfactual_wrong_repo,"Pr Title: feat(config): Allow ranges in envlist
+Review Comment: FWIW you no longer needs to add py and can include the `.` nowadays. E.g. `3.{13-9}` is valid. Probably should add a test for that too.",counterfactual_wrong_repo,https://github.com/tox-dev/tox/pull/3503,,,,,,3e3c5349d79cbfd3366c746f,tox-dev/tox,comment2context,python:testing,valid_no_gold,"Hypothesis is a testing project, but tox envlist range syntax has no Hypothesis-local implementation.",,"Counterfactual wrong-repo sample: this query is derived from a real positive ARB sample (3e3c5349d79cbfd3366c746f) in tox-dev/tox, but the candidate corpus is HypothesisWorks/hypothesis at c1d70b89c5d586660e1b21fdf422a10fd14e9d6c. The paired repository shares profile python:testing; source repository paths and repository identity tokens were excluded from the query."
+abstention__counterfactual__e7d1a726b4473542993808b3,pytest-dev/pytest,7bc02cca0dd92ec505b4556c054b4e06e9cb8d4d,counterfactual_wrong_repo,"Pr Title: Add `base_python_file` config option
+Review Comment: Needs to be a list, as is base_python, and we should not allow setting base_python at the same time as base_python_file",counterfactual_wrong_repo,https://github.com/tox-dev/tox/pull/3899,,,,,,e52201a1f70640a0cd30d807,tox-dev/tox,comment2context,python:testing,valid_no_gold,"pytest is a testing tool, but tox base_python_file configuration is not pytest-local context.",,"Counterfactual wrong-repo sample: this query is derived from a real positive ARB sample (e52201a1f70640a0cd30d807) in tox-dev/tox, but the candidate corpus is pytest-dev/pytest at 7bc02cca0dd92ec505b4556c054b4e06e9cb8d4d. The paired repository shares profile python:testing; source repository paths and repository identity tokens were excluded from the query."
+abstention__counterfactual__22d8229b9d3b944c3aca55d7,HypothesisWorks/hypothesis,2b1de221b8f627131169cac859597da6283cb7e1,counterfactual_wrong_repo,"Pr Title: Add `base_python_file` config option
+Review Comment: Needs to be a list, as is base_python, and we should not allow setting base_python at the same time as base_python_file",counterfactual_wrong_repo,https://github.com/tox-dev/tox/pull/3899,,,,,,e52201a1f70640a0cd30d807,tox-dev/tox,comment2context,python:testing,valid_no_gold,"Hypothesis is a testing project, but tox base_python/base_python_file configuration is not Hypothesis-local context.",,"Counterfactual wrong-repo sample: this query is derived from a real positive ARB sample (e52201a1f70640a0cd30d807) in tox-dev/tox, but the candidate corpus is HypothesisWorks/hypothesis at 2b1de221b8f627131169cac859597da6283cb7e1. The paired repository shares profile python:testing; source repository paths and repository identity tokens were excluded from the query."
+abstention__counterfactual__b6ba4334eb30cb7663a22615,eslint/eslint,78892043a36da4aa7640b59c99344b00c181048a,counterfactual_wrong_repo,"Pr Title: chore(cli): mirror cli-daemon spawn pattern in `cli show`
+Review Comment: Why don't we destroy stdin here as well?",counterfactual_wrong_repo,https://github.com/microsoft/playwright/pull/40770,,,,,,2f39489dd27f283deb0f7fae,microsoft/playwright,comment2context,javascript:testing,valid_no_gold,"ESLint is a JavaScript CLI, but Playwright cli-daemon stdin lifecycle is not ESLint-local context.",,"Counterfactual wrong-repo sample: this query is derived from a real positive ARB sample (2f39489dd27f283deb0f7fae) in microsoft/playwright, but the candidate corpus is eslint/eslint at 78892043a36da4aa7640b59c99344b00c181048a. The paired repository shares profile javascript:testing; source repository paths and repository identity tokens were excluded from the query."
+abstention__counterfactual__58f759482a877cfa8c16ca96,eslint/eslint,78892043a36da4aa7640b59c99344b00c181048a,counterfactual_wrong_repo,"Pr Title: chore(cli): mirror cli-daemon spawn pattern in `cli show`
+Review Comment: Instead of matching the ""Error"" message, I think it's better to print all the child process output around line 271, unless we got the ""Dashboard listening on ..."" message.",counterfactual_wrong_repo,https://github.com/microsoft/playwright/pull/40770,,,,,,405caf34d52dc85b3655ad2f,microsoft/playwright,comment2context,javascript:testing,valid_no_gold,"ESLint is a JavaScript CLI, but Playwright dashboard child-process output handling is not ESLint-local context.",,"Counterfactual wrong-repo sample: this query is derived from a real positive ARB sample (405caf34d52dc85b3655ad2f) in microsoft/playwright, but the candidate corpus is eslint/eslint at 78892043a36da4aa7640b59c99344b00c181048a. The paired repository shares profile javascript:testing; source repository paths and repository identity tokens were excluded from the query."
+abstention__counterfactual__09c18b231df6dd9896c08405,eslint/eslint,78892043a36da4aa7640b59c99344b00c181048a,counterfactual_wrong_repo,"Pr Title: chore(cli): mirror cli-daemon spawn pattern in `cli show`
+Review Comment: This is missing `stopSelfDestruct()`? Let's make sure we cover such a scenario with a test.",counterfactual_wrong_repo,https://github.com/microsoft/playwright/pull/40770,,,,,,8cd3867f9e984d7f3adf41e6,microsoft/playwright,comment2context,javascript:testing,valid_no_gold,"ESLint is a JavaScript project, but Playwright stopSelfDestruct daemon lifecycle is absent from ESLint.",,"Counterfactual wrong-repo sample: this query is derived from a real positive ARB sample (8cd3867f9e984d7f3adf41e6) in microsoft/playwright, but the candidate corpus is eslint/eslint at 78892043a36da4aa7640b59c99344b00c181048a. The paired repository shares profile javascript:testing; source repository paths and repository identity tokens were excluded from the query."
+abstention__counterfactual__eacaa54eae48472033057036,vitejs/vite,a07a4bd052ac75f916391c999c408ad5f2867e61,counterfactual_wrong_repo,"Pr Title: fix(reactivity): handle `Set` with initial reactive values edge case
+Review Comment: The test case for `Map.set` here is incorrect because you only modified `add` without changing `set`. I think this part of the test would pass even without this PR. Additionally, the `observedMap` should have an initial value like `observedSet`",counterfactual_wrong_repo,https://github.com/vuejs/core/pull/12393,,,,,,08152da08307954bc8ce76d3,vuejs/core,comment2context,javascript:frontend,valid_no_gold,"Vite is a frontend tool, but Set/Map reactivity internals are Vue-core specific and no Vite file is necessary.",,"Counterfactual wrong-repo sample: this query is derived from a real positive ARB sample (08152da08307954bc8ce76d3) in vuejs/core, but the candidate corpus is vitejs/vite at a07a4bd052ac75f916391c999c408ad5f2867e61. The paired repository shares profile javascript:frontend; source repository paths and repository identity tokens were excluded from the query."
+abstention__counterfactual__1adeecc9452af7264b425c04,microsoft/playwright,00dcb5cd511e1e1a1af9dded0b16a975ea7591de,counterfactual_wrong_repo,"Pr Title: fix(reactivity): handle `Set` with initial reactive values edge case
+Review Comment: The test case for `Map.set` here is incorrect because you only modified `add` without changing `set`. I think this part of the test would pass even without this PR. Additionally, the `observedMap` should have an initial value like `observedSet`",counterfactual_wrong_repo,https://github.com/vuejs/core/pull/12393,,,,,,08152da08307954bc8ce76d3,vuejs/core,comment2context,javascript:frontend,valid_no_gold,"Playwright is JavaScript tooling, but Vue reactivity Set/Map test behavior is not Playwright-local context.",,"Counterfactual wrong-repo sample: this query is derived from a real positive ARB sample (08152da08307954bc8ce76d3) in vuejs/core, but the candidate corpus is microsoft/playwright at 00dcb5cd511e1e1a1af9dded0b16a975ea7591de. The paired repository shares profile javascript:frontend; source repository paths and repository identity tokens were excluded from the query."
+abstention__counterfactual__db3602bb4851283ab0712f9f,eslint/eslint,78892043a36da4aa7640b59c99344b00c181048a,counterfactual_wrong_repo,"Pr Title: fix(reactivity): handle `Set` with initial reactive values edge case
+Review Comment: The test case for `Map.set` here is incorrect because you only modified `add` without changing `set`. I think this part of the test would pass even without this PR. Additionally, the `observedMap` should have an initial value like `observedSet`",counterfactual_wrong_repo,https://github.com/vuejs/core/pull/12393,,,,,,08152da08307954bc8ce76d3,vuejs/core,comment2context,javascript:frontend,valid_no_gold,"ESLint is JavaScript tooling, but Vue reactivity Map/Set internals are not ESLint-local context.",,"Counterfactual wrong-repo sample: this query is derived from a real positive ARB sample (08152da08307954bc8ce76d3) in vuejs/core, but the candidate corpus is eslint/eslint at 78892043a36da4aa7640b59c99344b00c181048a. The paired repository shares profile javascript:frontend; source repository paths and repository identity tokens were excluded from the query."
+abstention__counterfactual__9e1a0006620067f58a8ebfeb,astral-sh/ruff,038cf9e9effd96740625ee0ff374f63691178dc1,counterfactual_wrong_repo,"Pr Title: Implement vectored writes for `write_buf`
+Review Comment: I have a project in which I checked if `Buf::chunk().len()` < `Buf::remaining()` before using vectored writes and it resulted into a small performance boost. Could be useful here too.",counterfactual_wrong_repo,https://github.com/tokio-rs/tokio/pull/7871,,,,,,224dd1f1e8aaa1653bb1fbec,tokio-rs/tokio,comment2context,rust:async,valid_no_gold,"Ruff is a Rust project, but Tokio Buf/write_buf vectored-write behavior is not Ruff-local context.",,"Counterfactual wrong-repo sample: this query is derived from a real positive ARB sample (224dd1f1e8aaa1653bb1fbec) in tokio-rs/tokio, but the candidate corpus is astral-sh/ruff at 038cf9e9effd96740625ee0ff374f63691178dc1. The paired repository shares profile rust:async; source repository paths and repository identity tokens were excluded from the query."
+abstention__counterfactual__92775da35fdfe96304a2d8d4,astral-sh/ruff,277bc638341d5b7e80fbec65a00e9bcc7cfef8d4,counterfactual_wrong_repo,"Pr Title: Implement vectored writes for `write_buf`
+Review Comment: I have a project in which I checked if `Buf::chunk().len()` < `Buf::remaining()` before using vectored writes and it resulted into a small performance boost. Could be useful here too.",counterfactual_wrong_repo,https://github.com/tokio-rs/tokio/pull/7871,,,,,,224dd1f1e8aaa1653bb1fbec,tokio-rs/tokio,comment2context,rust:async,valid_no_gold,"Ruff is a Rust project, but Tokio write_buf vectored-write optimization has no Ruff-local implementation context.",,"Counterfactual wrong-repo sample: this query is derived from a real positive ARB sample (224dd1f1e8aaa1653bb1fbec) in tokio-rs/tokio, but the candidate corpus is astral-sh/ruff at 277bc638341d5b7e80fbec65a00e9bcc7cfef8d4. The paired repository shares profile rust:async; source repository paths and repository identity tokens were excluded from the query."
+abstention__counterfactual__7a0c0c96c41b17b08282c792,clap-rs/clap,68b5ff900bae8ee1a0e328c1a2301a7985e4f1c6,counterfactual_wrong_repo,"Pr Title: io-uring: Change `Completable` to not return io::Result
+Review Comment: When `register_op` returns an error, we should fail.",counterfactual_wrong_repo,https://github.com/tokio-rs/tokio/pull/7702,,,,,,2c17bde16c7e1549944e6a1f,tokio-rs/tokio,comment2context,rust:async,valid_no_gold,"Clap is a Rust project, but Tokio io-uring Completable/register_op behavior is not Clap-local context.",,"Counterfactual wrong-repo sample: this query is derived from a real positive ARB sample (2c17bde16c7e1549944e6a1f) in tokio-rs/tokio, but the candidate corpus is clap-rs/clap at 68b5ff900bae8ee1a0e328c1a2301a7985e4f1c6. The paired repository shares profile rust:async; source repository paths and repository identity tokens were excluded from the query."
+abstention__counterfactual__6e9e60f77828e0987084b8d5,astral-sh/ruff,f83d66918fab0c347602b806455bec8d5bbfd00f,counterfactual_wrong_repo,"Pr Title: Quote empty default values in help output
+Pr Body: ## Summary
+- quote empty default values in help output so they render as `""""` instead of an empty token
+- keep existing behavior for whitespace-containing values
+- add a derive regression test for `default_value_t` on `String`
+
+Fixes #4976",counterfactual_wrong_repo,https://github.com/clap-rs/clap/pull/6278,,,,,,597f32e9b482833bed151a23,clap-rs/clap,code2test,rust:cli,valid_no_gold,"Ruff is a Rust CLI, but empty default-value quoting in Clap help generation is not Ruff-local context.",,"Counterfactual wrong-repo sample: this query is derived from a real positive ARB sample (597f32e9b482833bed151a23) in clap-rs/clap, but the candidate corpus is astral-sh/ruff at f83d66918fab0c347602b806455bec8d5bbfd00f. The paired repository shares profile rust:cli; source repository paths and repository identity tokens were excluded from the query."
+abstention__counterfactual__f25b683a94709778151b740f,numpy/numpy,4d711763f8c5b978abd88cea710147c14d802675,counterfactual_wrong_repo,"Pr Title: No longer fall back to trying all union members when the variant selected by discriminator fails to serialize
+Review Comment: @davidhewitt I see `UnionChoices` is also used for the `UnionSerializer`. Can we confirm that this PR won't affect the current (non tagged) union serialization behavior?",counterfactual_wrong_repo,https://github.com/pydantic/pydantic/pull/12825,,,,,,106d7add9c91db6d52f8153a,pydantic/pydantic,comment2context,python:data,valid_no_gold,"NumPy is a Python data library, but Pydantic UnionSerializer/UnionChoices serialization behavior is not NumPy-local context.",,"Counterfactual wrong-repo sample: this query is derived from a real positive ARB sample (106d7add9c91db6d52f8153a) in pydantic/pydantic, but the candidate corpus is numpy/numpy at 4d711763f8c5b978abd88cea710147c14d802675. The paired repository shares profile python:data; source repository paths and repository identity tokens were excluded from the query."
+abstention__counterfactual__0d3fea92e569b6093bca2bf2,pydantic/pydantic,1a37a3d479dea9b21c7379e882bf5ec56fb94fc2,counterfactual_wrong_repo,"Pr Title: ENH: Allow downstream to register for DLPack support
+Review Comment: Should this be a `BufferError` instead? I'm not terribly familiar with this code, but it seems to be the error type used elsewhere in this compilation unit (except for one spot in `array_dlpack`, which might also be a bug).",counterfactual_wrong_repo,https://github.com/numpy/numpy/pull/31256,,,,,,1aed02fc2c6d73a0ae8e2f1f,numpy/numpy,comment2context,python:data,valid_no_gold,"Pydantic is a Python data/validation library, but NumPy DLPack registration and BufferError choice is not Pydantic-local context.",,"Counterfactual wrong-repo sample: this query is derived from a real positive ARB sample (1aed02fc2c6d73a0ae8e2f1f) in numpy/numpy, but the candidate corpus is pydantic/pydantic at 1a37a3d479dea9b21c7379e882bf5ec56fb94fc2. The paired repository shares profile python:data; source repository paths and repository identity tokens were excluded from the query."

@@ -1,0 +1,41 @@
+{
+  "candidate_filter": "code_only",
+  "evaluated": 287,
+  "keep_list": null,
+  "metrics": {
+    "code2test": {
+      "MRR": 0.07891591005173068,
+      "Recall@10": 0.2138364779874214,
+      "Recall@20": 0.3742138364779874,
+      "Recall@5": 0.08018867924528301,
+      "gold_coverage@8k": 0.04245283018867924,
+      "samples": 106
+    },
+    "comment2context": {
+      "MRR": 0.1612942756825788,
+      "Recall@10": 0.36458333333333337,
+      "Recall@20": 0.5270833333333333,
+      "Recall@5": 0.17916666666666667,
+      "gold_coverage@8k": 0.075,
+      "samples": 80
+    },
+    "overall": {
+      "MRR": 0.1620044075607137,
+      "Recall@10": 0.3710801393728223,
+      "Recall@20": 0.573170731707317,
+      "Recall@5": 0.21428571428571427,
+      "gold_coverage@8k": 0.08710801393728224,
+      "samples": 287
+    },
+    "trace2code": {
+      "MRR": 0.24976867772113928,
+      "Recall@10": 0.5412541254125413,
+      "Recall@20": 0.8184818481848185,
+      "Recall@5": 0.3828382838283828,
+      "gold_coverage@8k": 0.14356435643564355,
+      "samples": 101
+    }
+  },
+  "mode": "corpus",
+  "skipped": {}
+}

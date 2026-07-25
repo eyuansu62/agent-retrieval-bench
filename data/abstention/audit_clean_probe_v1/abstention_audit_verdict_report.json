@@ -1,0 +1,58 @@
+{
+  "audit_packet_candidates": 82,
+  "audit_rows": 82,
+  "balanced_clean_preview": {
+    "counterfactual": 32,
+    "counterfactual_share": 0.3902439024390244,
+    "max_counterfactual_share": 0.5,
+    "max_samples": 100,
+    "organic": 50,
+    "total": 82
+  },
+  "by_pool": {
+    "counterfactual_wrong_repo": {
+      "valid_no_gold": 32
+    },
+    "organic_no_gold": {
+      "valid_no_gold": 50
+    }
+  },
+  "by_reason": {
+    "counterfactual_wrong_repo": {
+      "valid_no_gold": 32
+    },
+    "external_service": {
+      "valid_no_gold": 7
+    },
+    "upstream_dependency": {
+      "valid_no_gold": 41
+    },
+    "user_error": {
+      "valid_no_gold": 2
+    }
+  },
+  "gates": {
+    "all_packets_reviewed": true,
+    "balanced_clean_ge_50": true,
+    "balanced_counterfactual_no_more_than_half": true,
+    "invalid_verdicts_zero": true,
+    "missing_packet_ids_zero": true,
+    "valid_rate_ge_90": true
+  },
+  "generated_at": "2026-06-12T15:00:05+00:00",
+  "inputs": {
+    "audit": "data/abstention/audit_clean_probe_v1/abstention_audit_packet.csv",
+    "audit_packet": "data/abstention/audit_clean_probe_v1/abstention_audit_packet.jsonl"
+  },
+  "invalid_verdicts": {},
+  "missing_packet_ids": [],
+  "pending": 0,
+  "pending_packet_ids": [],
+  "pending_packet_ids_truncated": 0,
+  "reviewed": 82,
+  "status": "ready_to_export",
+  "valid_rate": 1.0,
+  "verdicts": {
+    "valid_no_gold": 82
+  }
+}

@@ -1,0 +1,414 @@
+{
+  "buckets": {
+    "easy_lexical": 2,
+    "hard_lexical_miss": 7,
+    "invalid_missing_gold": 4,
+    "medium_lexical": 2,
+    "partial_lexical": 1,
+    "too_easy_direct_hint": 19
+  },
+  "conclusions": [
+    "V0.1 can be used as a closed-loop smoke benchmark, but not yet as a final model-ranking benchmark.",
+    "Keep code2test as the main hard slice for V0.2; lexical Recall@20 is low enough to expose retrieval weakness.",
+    "Keep comment2context, but downweight or separately report direct-hint samples because lexical retrieval is near ceiling.",
+    "Treat trace2code as smoke-only until it has enough validated samples for stable task-level metrics.",
+    "Use the failure table to inspect code2test weak labels before scaling V0.2.",
+    "Keep testlog2code excluded until the audited valid rate reaches the planned threshold."
+  ],
+  "distribution": {
+    "by_repo": {
+      "clap-rs/clap": 4,
+      "etcd-io/etcd": 3,
+      "fastapi/fastapi": 3,
+      "gin-gonic/gin": 3,
+      "huggingface/diffusers": 5,
+      "huggingface/transformers": 3,
+      "mockito/mockito": 4,
+      "pytest-dev/pytest": 2,
+      "spring-projects/spring-boot": 3,
+      "tokio-rs/tokio": 2,
+      "vitejs/vite": 2,
+      "vuejs/core": 1
+    },
+    "by_task": {
+      "code2test": 17,
+      "comment2context": 16,
+      "trace2code": 2
+    },
+    "by_task_repo": {
+      "code2test": {
+        "clap-rs/clap": 2,
+        "etcd-io/etcd": 2,
+        "fastapi/fastapi": 1,
+        "gin-gonic/gin": 1,
+        "huggingface/diffusers": 2,
+        "huggingface/transformers": 1,
+        "mockito/mockito": 2,
+        "spring-projects/spring-boot": 2,
+        "tokio-rs/tokio": 2,
+        "vitejs/vite": 1,
+        "vuejs/core": 1
+      },
+      "comment2context": {
+        "clap-rs/clap": 2,
+        "etcd-io/etcd": 1,
+        "fastapi/fastapi": 2,
+        "gin-gonic/gin": 2,
+        "huggingface/diffusers": 2,
+        "huggingface/transformers": 1,
+        "mockito/mockito": 2,
+        "pytest-dev/pytest": 2,
+        "spring-projects/spring-boot": 1,
+        "vitejs/vite": 1
+      },
+      "trace2code": {
+        "huggingface/diffusers": 1,
+        "huggingface/transformers": 1
+      }
+    }
+  },
+  "failure_samples": [
+    {
+      "MRR": 0.0009293680297397769,
+      "Recall@20": 0.0,
+      "bucket": "hard_lexical_miss",
+      "gold_files": [
+        "tests/test_jsonable_encoder.py"
+      ],
+      "missing_gold_files": [],
+      "recommendation": "keep_hard_code2test",
+      "repo": "fastapi/fastapi",
+      "sample_id": "dd57d697481176a1c52bd8d0",
+      "task_type": "code2test",
+      "top_files": [
+        "fastapi/_compat/v2.py",
+        "docs/en/docs/tutorial/schema-extra-example.md",
+        "docs/en/docs/how-to/migrate-from-pydantic-v1-to-pydantic-v2.md",
+        "fastapi/routing.py",
+        "docs/en/docs/how-to/separate-openapi-schemas.md"
+      ]
+    },
+    {
+      "MRR": 0.00125,
+      "Recall@20": 0.0,
+      "bucket": "hard_lexical_miss",
+      "gold_files": [
+        "tests/pipelines/qwenimage/test_qwenimage.py",
+        "tests/pipelines/qwenimage/test_qwenimage_controlnet.py",
+        "tests/pipelines/qwenimage/test_qwenimage_edit.py",
+        "tests/pipelines/qwenimage/test_qwenimage_edit_plus.py",
+        "tests/pipelines/qwenimage/test_qwenimage_img2img.py",
+        "tests/pipelines/qwenimage/test_qwenimage_inpaint.py"
+      ],
+      "missing_gold_files": [],
+      "recommendation": "keep_hard_code2test",
+      "repo": "huggingface/diffusers",
+      "sample_id": "fb1fc240d8def44d045f2426",
+      "task_type": "code2test",
+      "top_files": [
+        ".github/PULL_REQUEST_TEMPLATE.md",
+        "src/diffusers/pipelines/qwenimage/pipeline_qwenimage_controlnet_inpaint.py",
+        ".github/ISSUE_TEMPLATE/translate.md",
+        "docs/README.md",
+        "src/diffusers/pipelines/pipeline_loading_utils.py"
+      ]
+    },
+    {
+      "MRR": 0.003703703703703704,
+      "Recall@20": 0.0,
+      "bucket": "hard_lexical_miss",
+      "gold_files": [
+        "tests/models/d_fine/test_modeling_d_fine.py"
+      ],
+      "missing_gold_files": [],
+      "recommendation": "keep_hard_code2test",
+      "repo": "huggingface/transformers",
+      "sample_id": "210bcbf1622401f32d9f8c8e",
+      "task_type": "code2test",
+      "top_files": [
+        "src/transformers/loss/loss_d_fine.py",
+        "src/transformers/loss/loss_rt_detr.py",
+        "src/transformers/models/d_fine/modeling_d_fine.py",
+        "src/transformers/models/rt_detr/modeling_rt_detr.py",
+        "src/transformers/models/rt_detr/modular_rt_detr.py"
+      ]
+    },
+    {
+      "MRR": 0.00819672131147541,
+      "Recall@20": 0.0,
+      "bucket": "invalid_missing_gold",
+      "gold_files": [
+        "mockito-core/src/test/java/org/mockito/internal/PremainAttachTest.java",
+        "mockito-core/src/test/java/org/mockito/internal/creation/bytebuddy/ClinitSuppressionTransformerTest.java",
+        "mockito-integration-tests/inline-mocks-tests/src/test/java/org/mockitoinline/PremainClinitSuppressionTest.java",
+        "mockito-integration-tests/programmatic-tests/src/test/java/org/mockito/ProgrammaticMockMakerTest.java"
+      ],
+      "missing_gold_files": [
+        "mockito-core/src/test/java/org/mockito/internal/PremainAttachTest.java",
+        "mockito-core/src/test/java/org/mockito/internal/creation/bytebuddy/ClinitSuppressionTransformerTest.java",
+        "mockito-integration-tests/inline-mocks-tests/src/test/java/org/mockitoinline/PremainClinitSuppressionTest.java"
+      ],
+      "recommendation": "drop_missing_gold",
+      "repo": "mockito/mockito",
+      "sample_id": "6fe2bb7411520bb6314b0c5b",
+      "task_type": "code2test",
+      "top_files": [
+        "mockito-core/src/main/java/org/mockito/internal/PremainAttach.java",
+        "mockito-integration-tests/java-21-tests/build.gradle.kts",
+        "mockito-core/src/main/java/org/mockito/internal/creation/bytebuddy/InlineDelegateByteBuddyMockMaker.java",
+        "mockito-core/src/main/java/org/mockito/internal/PremainAttachAccess.java",
+        "mockito-core/src/test/java/org/mockitousage/misuse/InvalidUsageTest.java"
+      ]
+    },
+    {
+      "MRR": 0.011627906976744186,
+      "Recall@20": 0.0,
+      "bucket": "invalid_missing_gold",
+      "gold_files": [
+        "mockito-core/src/test/java/org/mockito/internal/PremainAttachTest.java",
+        "mockito-core/src/test/java/org/mockito/internal/creation/bytebuddy/ClinitSuppressionTransformerTest.java",
+        "mockito-integration-tests/inline-mocks-tests/src/test/java/org/mockitoinline/PremainClinitSuppressionTest.java",
+        "mockito-integration-tests/programmatic-tests/src/test/java/org/mockito/ProgrammaticMockMakerTest.java"
+      ],
+      "missing_gold_files": [
+        "mockito-core/src/test/java/org/mockito/internal/PremainAttachTest.java",
+        "mockito-core/src/test/java/org/mockito/internal/creation/bytebuddy/ClinitSuppressionTransformerTest.java",
+        "mockito-integration-tests/inline-mocks-tests/src/test/java/org/mockitoinline/PremainClinitSuppressionTest.java"
+      ],
+      "recommendation": "drop_missing_gold",
+      "repo": "mockito/mockito",
+      "sample_id": "8fbb91cb2863b0c380f029a2",
+      "task_type": "code2test",
+      "top_files": [
+        "mockito-integration-tests/java-21-tests/build.gradle.kts",
+        "mockito-core/src/main/java/org/mockito/internal/creation/bytebuddy/InlineDelegateByteBuddyMockMaker.java",
+        "mockito-core/src/main/java/org/mockito/internal/PremainAttach.java",
+        "mockito-core/src/test/java/org/mockitousage/misuse/InvalidUsageTest.java",
+        "mockito-core/src/main/java/org/mockito/internal/PremainAttachAccess.java"
+      ]
+    },
+    {
+      "MRR": 0.012345679012345678,
+      "Recall@20": 0.0,
+      "bucket": "hard_lexical_miss",
+      "gold_files": [
+        "binding/form_mapping_test.go"
+      ],
+      "missing_gold_files": [],
+      "recommendation": "keep_hard_code2test",
+      "repo": "gin-gonic/gin",
+      "sample_id": "13e634ffbf14f5502ea30a90",
+      "task_type": "code2test",
+      "top_files": [
+        ".github/PULL_REQUEST_TEMPLATE.md",
+        "CONTRIBUTING.md",
+        "binding/form_mapping.go",
+        ".github/workflows/codeql.yml",
+        "docs/doc.md"
+      ]
+    },
+    {
+      "MRR": 0.024390243902439025,
+      "Recall@20": 0.0,
+      "bucket": "hard_lexical_miss",
+      "gold_files": [
+        "server/etcdserver/txn/range_bench_test.go",
+        "server/etcdserver/txn/txn_test.go",
+        "server/storage/mvcc/index_test.go",
+        "server/storage/mvcc/kv_test.go",
+        "server/storage/mvcc/kvstore_test.go"
+      ],
+      "missing_gold_files": [],
+      "recommendation": "keep_hard_code2test",
+      "repo": "etcd-io/etcd",
+      "sample_id": "1dd2bdfdcf7092e1c69f50d6",
+      "task_type": "code2test",
+      "top_files": [
+        "server/etcdserver/v3_server.go",
+        "server/storage/mvcc/kvstore_txn.go",
+        "tools/benchmark/cmd/range.go",
+        "client/v3/op.go",
+        "server/storage/mvcc/index.go"
+      ]
+    },
+    {
+      "MRR": 0.03125,
+      "Recall@20": 0.0,
+      "bucket": "hard_lexical_miss",
+      "gold_files": [
+        "tokio/tests/rt_common.rs"
+      ],
+      "missing_gold_files": [],
+      "recommendation": "keep_hard_code2test",
+      "repo": "tokio-rs/tokio",
+      "sample_id": "a395d9eb9a2c1e5a6a079c41",
+      "task_type": "code2test",
+      "top_files": [
+        "tokio/src/runtime/mod.rs",
+        "tokio/src/runtime/thread_pool/worker.rs",
+        "tokio/src/runtime/park.rs",
+        "tokio/src/task/mod.rs",
+        "tokio/src/io/mod.rs"
+      ]
+    },
+    {
+      "MRR": 0.03225806451612903,
+      "Recall@20": 0.0,
+      "bucket": "hard_lexical_miss",
+      "gold_files": [
+        "tokio/tests/rt_common.rs"
+      ],
+      "missing_gold_files": [],
+      "recommendation": "keep_hard_code2test",
+      "repo": "tokio-rs/tokio",
+      "sample_id": "18842b45a0c6a9dd08e87de4",
+      "task_type": "code2test",
+      "top_files": [
+        "tokio/src/runtime/builder.rs",
+        "tokio/src/runtime/thread_pool/worker.rs",
+        "tokio/src/runtime/park.rs",
+        "tokio/src/runtime/mod.rs",
+        "tokio/tests/io_driver.rs"
+      ]
+    },
+    {
+      "MRR": 0.07142857142857142,
+      "Recall@20": 0.25,
+      "bucket": "invalid_missing_gold",
+      "gold_files": [
+        "tests/models/testing_utils/__init__.py",
+        "tests/models/testing_utils/parallelism.py",
+        "tests/models/testing_utils/utils.py",
+        "tests/models/transformers/test_models_transformer_flux.py"
+      ],
+      "missing_gold_files": [
+        "tests/models/testing_utils/utils.py"
+      ],
+      "recommendation": "drop_missing_gold",
+      "repo": "huggingface/diffusers",
+      "sample_id": "9c61dfc0e244c9c32a56732a",
+      "task_type": "code2test",
+      "top_files": [
+        "src/diffusers/models/attention_dispatch.py",
+        "src/diffusers/models/transformers/transformer_prx.py",
+        "docs/source/en/optimization/attention_backends.md",
+        "examples/research_projects/anytext/anytext.py",
+        "src/diffusers/models/transformers/cogvideox_transformer_3d.py"
+      ]
+    },
+    {
+      "MRR": 0.5,
+      "Recall@20": 0.5,
+      "bucket": "invalid_missing_gold",
+      "gold_files": [
+        "server/proxy/grpcproxy/adapter/chan_stream_test.go",
+        "tests/integration/clientv3/maintenance_test.go"
+      ],
+      "missing_gold_files": [
+        "server/proxy/grpcproxy/adapter/chan_stream_test.go"
+      ],
+      "recommendation": "drop_missing_gold",
+      "repo": "etcd-io/etcd",
+      "sample_id": "85ee292597f83f279a729958",
+      "task_type": "code2test",
+      "top_files": [
+        "server/proxy/grpcproxy/adapter/chan_stream.go",
+        "tests/integration/clientv3/maintenance_test.go",
+        "server/proxy/grpcproxy/maintenance.go",
+        "code-of-conduct.md",
+        ".github/PULL_REQUEST_TEMPLATE.md"
+      ]
+    },
+    {
+      "MRR": 0.5,
+      "Recall@20": 0.5,
+      "bucket": "partial_lexical",
+      "gold_files": [
+        "spring-boot-project/spring-boot-autoconfigure/src/test/java/org/springframework/boot/autoconfigure/web/reactive/error/DefaultErrorWebExceptionHandlerIntegrationTests.java",
+        "spring-boot-project/spring-boot-autoconfigure/src/test/java/org/springframework/boot/autoconfigure/web/servlet/error/ErrorMvcAutoConfigurationTests.java"
+      ],
+      "missing_gold_files": [],
+      "recommendation": "keep_hard_code2test",
+      "repo": "spring-projects/spring-boot",
+      "sample_id": "e8ef6b1c59b7afde52d0cded",
+      "task_type": "code2test",
+      "top_files": [
+        "spring-boot-project/spring-boot-autoconfigure/src/main/java/org/springframework/boot/autoconfigure/web/reactive/error/AbstractErrorWebExceptionHandler.java",
+        "spring-boot-project/spring-boot-autoconfigure/src/test/java/org/springframework/boot/autoconfigure/web/reactive/error/DefaultErrorWebExceptionHandlerIntegrationTests.java",
+        "spring-boot-project/spring-boot/src/main/java/org/springframework/boot/web/reactive/error/ErrorWebExceptionHandler.java",
+        "spring-boot-project/spring-boot-autoconfigure/src/main/java/org/springframework/boot/autoconfigure/web/servlet/error/ErrorMvcAutoConfiguration.java",
+        "spring-boot-project/spring-boot-autoconfigure/src/main/java/org/springframework/boot/autoconfigure/web/ErrorProperties.java"
+      ]
+    }
+  ],
+  "generated_at": "2026-04-27T04:53:09+00:00",
+  "gold_corpus": {
+    "missing_by_task": {
+      "code2test": 4
+    },
+    "samples_with_all_gold": 31,
+    "samples_with_missing_gold": 4
+  },
+  "inputs": {
+    "baseline_details": "data/eval/v0_1/lexical_details.jsonl",
+    "corpus_manifest": "data/corpus/v0_1/corpus_manifest.jsonl",
+    "samples": "data/benchmark/v0_1/samples.jsonl"
+  },
+  "metrics_by_task": {
+    "code2test": {
+      "MRR": 0.14183936163353159,
+      "Recall@10": 0.29411764705882354,
+      "Recall@20": 0.36764705882352944,
+      "Recall@5": 0.23529411764705882,
+      "gold_coverage@8k": 0.11764705882352941,
+      "samples": 17
+    },
+    "comment2context": {
+      "MRR": 0.96875,
+      "Recall@10": 1.0,
+      "Recall@20": 1.0,
+      "Recall@5": 1.0,
+      "gold_coverage@8k": 1.0,
+      "samples": 16
+    },
+    "overall": {
+      "MRR": 0.5546076899362868,
+      "Recall@10": 0.6571428571428571,
+      "Recall@20": 0.6928571428571428,
+      "Recall@5": 0.6285714285714286,
+      "gold_coverage@8k": 0.5714285714285714,
+      "samples": 35
+    },
+    "trace2code": {
+      "MRR": 0.75,
+      "Recall@10": 1.0,
+      "Recall@20": 1.0,
+      "Recall@5": 1.0,
+      "gold_coverage@8k": 1.0,
+      "samples": 2
+    }
+  },
+  "query_hints": {
+    "by_task": {
+      "code2test": {
+        "gold_path_hint": 1
+      },
+      "comment2context": {
+        "gold_path_hint": 16
+      },
+      "trace2code": {
+        "gold_path_hint": 2
+      }
+    },
+    "samples_with_gold_basename_hint": 0,
+    "samples_with_gold_path_hint": 19
+  },
+  "recommendations": {
+    "downweight_direct_hint": 17,
+    "drop_missing_gold": 4,
+    "keep": 4,
+    "keep_hard_code2test": 8,
+    "smoke_only": 2
+  },
+  "samples": 35
+}

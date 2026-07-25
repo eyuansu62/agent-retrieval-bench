@@ -1,0 +1,47 @@
+{
+  "candidate_filter": "tests_only",
+  "evaluated": 287,
+  "keep_list": null,
+  "metrics": {
+    "code2test": {
+      "MRR": 0.3874747397814089,
+      "Recall@10": 0.6044025157232704,
+      "Recall@20": 0.7616352201257862,
+      "Recall@5": 0.45943396226415095,
+      "gold_coverage@8k": 0.22484276729559746,
+      "samples": 106
+    },
+    "comment2context": {
+      "MRR": 0.1984021029750518,
+      "Recall@10": 0.29791666666666666,
+      "Recall@20": 0.34791666666666665,
+      "Recall@5": 0.21458333333333335,
+      "gold_coverage@8k": 0.0875,
+      "samples": 80
+    },
+    "overall": {
+      "MRR": 0.19841285942450693,
+      "Recall@10": 0.30627177700348435,
+      "Recall@20": 0.37828106852497095,
+      "Recall@5": 0.22950058072009288,
+      "gold_coverage@8k": 0.10743321718931474,
+      "samples": 287
+    },
+    "trace2code": {
+      "MRR": 0.0,
+      "Recall@10": 0.0,
+      "Recall@20": 0.0,
+      "Recall@5": 0.0,
+      "gold_coverage@8k": 0.0,
+      "samples": 101
+    }
+  },
+  "mode": "repomap",
+  "model": "aider-style-repomap",
+  "skipped": {},
+  "weights": {
+    "affinity": 0.1,
+    "pagerank": 0.25,
+    "query": 0.65
+  }
+}

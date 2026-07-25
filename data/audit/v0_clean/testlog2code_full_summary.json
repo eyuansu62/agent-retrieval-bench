@@ -1,0 +1,23 @@
+{
+  "audit_path": "data/audit/v0_clean/testlog2code_full_audit.csv",
+  "by_task": {
+    "testlog2code": {
+      "counts": {
+        "ambiguous": 8,
+        "noisy": 29,
+        "valid": 7
+      },
+      "ratios": {
+        "ambiguous": 0.18181818181818182,
+        "leaked": 0.0,
+        "noisy": 0.6590909090909091,
+        "other": 0.0,
+        "pending": 0.0,
+        "valid": 0.1590909090909091
+      },
+      "total": 44
+    }
+  },
+  "kept": 7,
+  "total": 44
+}
