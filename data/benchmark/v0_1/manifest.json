@@ -1,0 +1,23 @@
+{
+  "counts_by_task": {
+    "code2test": 17,
+    "comment2context": 16,
+    "trace2code": 2
+  },
+  "derived_dir": "data/derived_v0_clean",
+  "keep_list": "data/audit/v0_clean/keep_samples.jsonl",
+  "missing_keep_ids": [],
+  "outputs": {
+    "code2test": "data/benchmark/v0_1/code2test.jsonl",
+    "comment2context": "data/benchmark/v0_1/comment2context.jsonl",
+    "samples": "data/benchmark/v0_1/samples.jsonl",
+    "trace2code": "data/benchmark/v0_1/trace2code.jsonl"
+  },
+  "tasks": [
+    "code2test",
+    "comment2context",
+    "trace2code"
+  ],
+  "total": 35,
+  "valid_only": true
+}

@@ -1,0 +1,47 @@
+{
+  "candidate_filter": "code_only",
+  "evaluated": 287,
+  "keep_list": null,
+  "metrics": {
+    "code2test": {
+      "MRR": 0.2284281996920701,
+      "Recall@10": 0.48144654088050315,
+      "Recall@20": 0.6122641509433963,
+      "Recall@5": 0.28647798742138364,
+      "gold_coverage@8k": 0.09748427672955975,
+      "samples": 106
+    },
+    "comment2context": {
+      "MRR": 0.15897627316513135,
+      "Recall@10": 0.28125,
+      "Recall@20": 0.49375,
+      "Recall@5": 0.18541666666666667,
+      "gold_coverage@8k": 0.03333333333333333,
+      "samples": 80
+    },
+    "overall": {
+      "MRR": 0.2282538668781462,
+      "Recall@10": 0.5094076655052264,
+      "Recall@20": 0.6686411149825784,
+      "Recall@5": 0.3276422764227642,
+      "gold_coverage@8k": 0.06968641114982578,
+      "samples": 287
+    },
+    "trace2code": {
+      "MRR": 0.28294424528176254,
+      "Recall@10": 0.7194719471947195,
+      "Recall@20": 0.8663366336633663,
+      "Recall@5": 0.4834983498349835,
+      "gold_coverage@8k": 0.06930693069306931,
+      "samples": 101
+    }
+  },
+  "mode": "repomap",
+  "model": "aider-style-repomap",
+  "skipped": {},
+  "weights": {
+    "affinity": 0.1,
+    "pagerank": 0.25,
+    "query": 0.65
+  }
+}
