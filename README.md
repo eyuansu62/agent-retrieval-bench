@@ -37,6 +37,47 @@ The combined release corpus contains 308 reusable repository/base-commit
 snapshots, approximately 392K files, and 7.9M chunks. The evaluated rows use 271
 of those snapshots.
 
+### Repository coverage
+
+The 25 sample-bearing repositories span six primary languages: 13 Python,
+three Go, three Rust, three TypeScript, two Java, and one JavaScript repository.
+The table reports all four positive tasks and both no-gold strata.
+Counterfactual rows are counted under the repository whose corpus is searched.
+
+| Repository | Language | C2T | C2C | T2C | E2R | Natural | Counterfactual | All |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `HypothesisWorks/hypothesis` | Python | 0 | 1 | 0 | 0 | 0 | 5 | 6 |
+| `astral-sh/ruff` | Rust | 0 | 6 | 0 | 0 | 1 | 3 | 10 |
+| `caddyserver/caddy` | Go | 0 | 0 | 7 | 6 | 3 | 0 | 16 |
+| `clap-rs/clap` | Rust | 4 | 0 | 1 | 5 | 0 | 1 | 11 |
+| `eslint/eslint` | JavaScript | 0 | 1 | 0 | 0 | 1 | 4 | 6 |
+| `etcd-io/etcd` | Go | 15 | 16 | 4 | 6 | 0 | 0 | 41 |
+| `fastapi/fastapi` | Python | 3 | 0 | 0 | 0 | 0 | 0 | 3 |
+| `gin-gonic/gin` | Go | 15 | 0 | 56 | 17 | 0 | 0 | 88 |
+| `huggingface/diffusers` | Python | 6 | 9 | 0 | 1 | 0 | 2 | 18 |
+| `huggingface/transformers` | Python | 15 | 13 | 0 | 8 | 0 | 0 | 36 |
+| `ipython/ipython` | Python | 0 | 2 | 0 | 0 | 0 | 2 | 4 |
+| `microsoft/playwright` | TypeScript | 0 | 4 | 0 | 0 | 3 | 1 | 8 |
+| `mockito/mockito` | Java | 1 | 0 | 0 | 0 | 0 | 0 | 1 |
+| `numpy/numpy` | Python | 0 | 1 | 0 | 0 | 5 | 1 | 7 |
+| `pallets/click` | Python | 0 | 0 | 26 | 0 | 0 | 0 | 26 |
+| `pydantic/pydantic` | Python | 0 | 1 | 0 | 0 | 0 | 1 | 2 |
+| `pypa/pip` | Python | 0 | 5 | 0 | 0 | 4 | 2 | 11 |
+| `pytest-dev/pytest` | Python | 3 | 2 | 1 | 1 | 14 | 5 | 26 |
+| `python/mypy` | Python | 0 | 1 | 0 | 0 | 0 | 0 | 1 |
+| `scrapy/scrapy` | Python | 0 | 3 | 0 | 0 | 3 | 0 | 6 |
+| `spring-projects/spring-boot` | Java | 5 | 0 | 0 | 3 | 0 | 0 | 8 |
+| `tokio-rs/tokio` | Rust | 15 | 11 | 6 | 6 | 2 | 0 | 40 |
+| `tox-dev/tox` | Python | 0 | 2 | 0 | 0 | 0 | 3 | 5 |
+| `vitejs/vite` | TypeScript | 19 | 1 | 0 | 5 | 14 | 2 | 41 |
+| `vuejs/core` | TypeScript | 5 | 1 | 0 | 0 | 0 | 0 | 6 |
+| **Total** |  | **106** | **80** | **101** | **58** | **50** | **32** | **427** |
+
+C2T, C2C, T2C, and E2R denote `code2test`, `comment2context`,
+`trace2code`, and `edit2ripple`, respectively. The repository distribution is
+not sample-balanced: Gin contributes 88 of 345 positive samples, and the four
+largest positive repositories contribute 203 (58.8%).
+
 ### Design principles
 
 - **Agentic relevance:** gold files represent context needed next in a coding
