@@ -25,3 +25,18 @@ keywords:
   - retrieval benchmark
   - agentic retrieval
 license: MIT
+preferred-citation:
+  type: article
+  title: "Agent Retrieval Bench: Evaluating Repository Context Retrieval for Coding Agents"
+  authors:
+    - family-names: Qin
+      given-names: Bowen
+      affiliation: National University of Singapore
+    - family-names: Xie
+      given-names: Yi
+      affiliation: Peking University
+  year: 2026
+  month: 7
+  day: 27
+  doi: 10.48550/arXiv.2607.24882
+  url: https://arxiv.org/abs/2607.24882

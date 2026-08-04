@@ -1,6 +1,7 @@
 # Agent Retrieval Bench
 
 [![Dataset](https://img.shields.io/badge/Hugging%20Face-dataset-yellow)](https://huggingface.co/datasets/eyuansu71/agent_retrieval_bench)
+[![Paper](https://img.shields.io/badge/arXiv-2607.24882-b31b1b.svg)](https://arxiv.org/abs/2607.24882)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Citation](https://img.shields.io/badge/citation-CFF-lightgrey)](CITATION.cff)
 
@@ -14,6 +15,14 @@ Relevant files are selected by the next need of the coding workflow, not by
 query-file text similarity alone. A failure trace may expose a test while the
 needed file is its root-cause implementation; a review comment may name one
 file while the missing constraint lives elsewhere.
+
+## Paper
+
+**Agent Retrieval Bench: Evaluating Repository Context Retrieval for Coding
+Agents**<br>
+Bowen Qin and Yi Xie<br>
+[arXiv:2607.24882](https://arxiv.org/abs/2607.24882) ·
+[PDF](https://arxiv.org/pdf/2607.24882)
 
 ## Benchmark
 
@@ -325,10 +334,14 @@ code, benchmark metadata, and documentation are MIT licensed; see
 
 ```bibtex
 @misc{qin2026agentretrievalbench,
-  title  = {Agent Retrieval Bench: Evaluating Repository Context Retrieval for Coding Agents},
-  author = {Bowen Qin and Yi Xie},
-  year   = {2026},
-  url    = {https://github.com/eyuansu62/agent-retrieval-bench}
+  title         = {Agent Retrieval Bench: Evaluating Repository Context Retrieval for Coding Agents},
+  author        = {Bowen Qin and Yi Xie},
+  year          = {2026},
+  eprint        = {2607.24882},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.IR},
+  doi           = {10.48550/arXiv.2607.24882},
+  url           = {https://arxiv.org/abs/2607.24882}
 }
 ```
 
