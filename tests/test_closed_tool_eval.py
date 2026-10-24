@@ -217,6 +217,25 @@ class ClosedToolEvalTest(unittest.TestCase):
         self.assertEqual({hit["path"] for hit in hits}, {"src/time/timeout.rs", "tests/time_panic.rs"})
         self.assertGreaterEqual(next(hit for hit in hits if hit["path"] == "tests/time_panic.rs")["matches"], 2)
 
+    def test_grep_files_snippets_use_original_unicode_offsets(self):
+        for prefix, word, query in (
+            ("İ" * 200, "needle", "NEEDLE"),
+            ("é" * 200, "needle", "needle"),
+            ("z" * 200, "İ", "i\u0307"),
+        ):
+            with self.subTest(word=word, prefix=prefix[:1]):
+                text = f"{prefix} {word}\n"
+                hit, = grep_files({"subject.py": text}, query, top_k=1)
+                self.assertEqual(hit["matches"], 1)
+                self.assertFalse(hit["path_match"])
+                self.assertEqual(hit["snippet"], text[len(prefix) + 1 - 80:].replace("\n", "\\n"))
+
+    def test_grep_files_path_only_match_has_no_body_snippet(self):
+        hit, = grep_files({"src/timeout.py": "def clean(): return 1\n"}, "TIMEOUT", top_k=1)
+        self.assertEqual(hit["matches"], 1)
+        self.assertTrue(hit["path_match"])
+        self.assertEqual(hit["snippet"], "")
+
     def test_run_closed_tool_sample_finds_gold_file(self):
         sample = {
             "id": "s1",

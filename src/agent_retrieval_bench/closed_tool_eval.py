@@ -1912,6 +1912,14 @@ def first_snippet(text: str, pattern_lower: str) -> str:
     index = lower.find(pattern_lower)
     if index < 0:
         return ""
+    if len(lower) != len(text):
+        # Lowercasing can expand a character, so map back before slicing text.
+        lowered_offset = 0
+        for original_index, char in enumerate(text):
+            lowered_offset += len(char.lower())
+            if lowered_offset > index:
+                index = original_index
+                break
     start = max(0, index - 80)
     end = min(len(text), index + len(pattern_lower) + 160)
     return text[start:end].replace("\n", "\\n")
