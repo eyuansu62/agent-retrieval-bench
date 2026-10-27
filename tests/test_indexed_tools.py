@@ -460,6 +460,31 @@ class RetainFailuresTest(unittest.TestCase):
             sum(row["build_seconds"] for row in summary["index_builds"] if row["base_commit"] == "def"), 2.5
         )
 
+    def test_failed_prepare_then_cold_retry_then_completed_resume(self):
+        # An unavailable preparation has no cached flag: it is not a cold build.
+        self.run_arm(
+            {"s1": [self.READ, self.SUBMIT], "s2": [self.READ, RuntimeError("API unavailable")]},
+            FakeProvider(available=False, build={"build_seconds": 0.5, "reason": "prepare failed"}),
+        )
+        summary = self.run_arm(
+            {"s2": [self.READ, self.SUBMIT]},
+            FakeProvider(build={"build_seconds": 2.5, "cached": False}),
+        )
+        policy = self.details()[1]['closed_tool']
+        prior = policy['prior_attempts'][0]
+        self.assertFalse(prior['index_status']['available'])
+        self.assertEqual(prior['index_status']['build_seconds'], 0.5)
+        self.assertEqual(prior['model_usage'], self.USAGE)
+        build = next(row for row in summary['index_builds'] if row['base_commit'] == 'def')
+        self.assertTrue(build['available'])
+        self.assertFalse(build['cached'])
+        self.assertEqual(build['build_seconds'], 2.5)
+        provider = FakeProvider(build={"cached": True})
+        resumed = self.run_arm({}, provider)
+        self.assertEqual(provider.prepared, [])
+        self.assertEqual(resumed['index_builds'], summary['index_builds'])
+        self.assertEqual(resumed['closed_tool_metrics']['overall']['prior_attempt_model_input_tokens'], 100)
+
     def test_the_prefix_report_counts_selected_samples_without_trajectories(self):
         self.run_arm({"s1": [self.READ, self.SUBMIT]}, FakeProvider(), limit_samples=1)
         report = report_closed_tool_budget_curve(

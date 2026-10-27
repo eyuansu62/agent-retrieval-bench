@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import tempfile
 import time
+import warnings
 from collections import Counter, defaultdict
 from itertools import islice
 from pathlib import Path
@@ -157,11 +158,16 @@ def evaluate_closed_tool_grep(
             break
 
     validate_sample_ids(samples)
-    existing_details, details_handle = prepare_details_resume(details_path, force=force)
+    file_cache: dict[Path, dict[str, str]] = {}
+    experiment_identity = _experiment_identity('grep', locals())
+    input_identities = _sample_identities(((sample, manifest) for sample in samples), file_cache)
+    existing_details, details_handle = prepare_details_resume(
+        details_path, force=force, experiment_identity=experiment_identity,
+        sample_identities=input_identities,
+    )
     details_by_id = dict(existing_details)
     ordered_ids: list[str] = []
     skipped = Counter()
-    file_cache: dict[Path, dict[str, str]] = {}
     with details_handle:
         for sample in samples:
             sample_id = str(sample.get("id") or "")
@@ -201,6 +207,7 @@ def evaluate_closed_tool_grep(
                 final_k=final_k,
                 grep_top_k=grep_top_k,
             )
+            detail["resume_identity"] = {"experiment": experiment_identity, "sample": input_identities[sample_id]}
             if sample_id:
                 details_by_id[sample_id] = detail
             append_detail_jsonl(details_handle, detail)
@@ -232,8 +239,9 @@ def evaluate_closed_tool_grep(
         "generated_at": utc_now(),
         "runtime_seconds": time.monotonic() - started,
     }
+    summary["experiment_identity"] = experiment_identity
     write_json(out_path, summary)
-    write_jsonl(details_path, details)
+    write_jsonl(details_path, details_by_id.values())
     ensure_parent(markdown_out_path)
     markdown_out_path.write_text(render_markdown(summary), encoding="utf-8")
     return summary
@@ -286,12 +294,17 @@ def evaluate_closed_tool_openai(
             api_key=str(os.environ["OPENAI_API_KEY"]),
             base_url=os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1"),
         )
-    existing_details, details_handle = prepare_details_resume(details_path, force=force)
+    file_cache: dict[Path, dict[str, str]] = {}
+    experiment_identity = _experiment_identity('openai', locals())
+    input_identities = _sample_identities(samples, file_cache)
+    existing_details, details_handle = prepare_details_resume(
+        details_path, force=force, experiment_identity=experiment_identity,
+        sample_identities=input_identities,
+    )
     details_by_id = dict(existing_details)
     ordered_ids: list[str] = []
     skipped = Counter()
     failures: list[dict[str, Any]] = []
-    file_cache: dict[Path, dict[str, str]] = {}
     with details_handle:
         for sample, manifest in samples:
             sample_id = str(sample.get("id") or "")
@@ -344,8 +357,6 @@ def evaluate_closed_tool_openai(
             except Exception as exc:
                 failure = {"sample_id": sample_id, "error": type(exc).__name__, "message": str(exc)}
                 failures.append(failure)
-                if not retain_failures:
-                    continue
                 # The failed attempt scores as empty context but keeps its costs.
                 detail = getattr(exc, "partial_detail", None) or failed_closed_tool_detail(
                     sample, gold_files, failure, policy=f"openai_{mode}", index_status=index_status
@@ -353,6 +364,7 @@ def evaluate_closed_tool_openai(
                 detail["closed_tool"]["failure"] = {**detail["closed_tool"].get("failure", {}), **failure}
             if previous is not None:
                 detail["closed_tool"]["prior_attempts"] = prior_attempts(previous)
+            detail["resume_identity"] = {"experiment": experiment_identity, "sample": input_identities[sample_id]}
             if sample_id:
                 details_by_id[sample_id] = detail
             append_detail_jsonl(details_handle, detail)
@@ -405,8 +417,9 @@ def evaluate_closed_tool_openai(
         summary["indexed_tools"] = indexed_tools.describe()
         # Index builds are a per-snapshot cost, reported apart from the policy run.
         summary["index_builds"] = index_builds(details, indexed_tools.snapshots)
+    summary["experiment_identity"] = experiment_identity
     write_json(out_path, summary)
-    write_jsonl(details_path, scored)
+    write_jsonl(details_path, details_by_id.values())
     ensure_parent(markdown_out_path)
     markdown_out_path.write_text(render_markdown(summary), encoding="utf-8")
     return summary
@@ -483,6 +496,10 @@ ATTEMPT_FIELDS = (
     "index_status",
     "latency_seconds",
     "trace",
+    "codex_exec_calls",
+    "codex_exec_returncodes",
+    "codex_exec_events",
+    "protocol_violations",
 )
 
 
@@ -497,9 +514,9 @@ def index_builds(details: list[dict[str, Any]], snapshots: dict[tuple[str, str],
     """One record per snapshot: its construction, else its first preparation.
 
     Records come from each stored trajectory and its earlier attempts, then
-    from this run's preparations. The construction is the first record not
-    served from a cache, so a resume or a cached retry keeps the original
-    build cost, once.
+    from this run's preparations. A failed preparation is not a construction;
+    choose the first available cold build, then an available cached record,
+    else the first failure. Earlier attempt costs remain in the details.
     """
     records: dict[tuple[str, str], list[dict[str, Any]]] = {}
     for detail in details:
@@ -511,7 +528,10 @@ def index_builds(details: list[dict[str, Any]], snapshots: dict[tuple[str, str],
                 records.setdefault(key, []).append({"repo": key[0], "base_commit": key[1], **status})
     for key, status in snapshots.items():
         records.setdefault(key, []).append(dict(status))
-    return [next((row for row in rows if row.get("cached") is not True), rows[0]) for rows in records.values()]
+    return [next(
+        (row for row in rows if row.get("available") is True and row.get("cached") is not True),
+        next((row for row in rows if row.get("available") is True), rows[0]),
+    ) for rows in records.values()]
 
 
 def select_closed_tool_samples(
@@ -663,18 +683,24 @@ def evaluate_closed_tool_codex(
     validate_sample_ids(samples)
     codex_bin = resolve_codex_bin(codex_bin)
     seed_files_by_sample = load_seed_files(seed_details, top_k=seed_top_k)
-    existing_details, details_handle = prepare_details_resume(details_path, force=force)
+    file_cache: dict[Path, dict[str, str]] = {}
+    experiment_identity = _experiment_identity('codex', locals())
+    input_identities = _sample_identities(((sample, manifest) for sample in samples), file_cache, seeds=seed_files_by_sample)
+    existing_details, details_handle = prepare_details_resume(
+        details_path, force=force, experiment_identity=experiment_identity,
+        sample_identities=input_identities,
+    )
     details_by_id = dict(existing_details)
     ordered_ids: list[str] = []
     skipped = Counter()
     failures: list[dict[str, Any]] = []
-    file_cache: dict[Path, dict[str, str]] = {}
     with details_handle:
         for sample in samples:
             sample_id = str(sample.get("id") or "")
             if sample_id:
                 ordered_ids.append(sample_id)
-            if sample_id in details_by_id:
+            previous = details_by_id.get(sample_id)
+            if previous is not None and "failure" not in previous.get("closed_tool", {}):
                 skipped["existing"] += 1
                 continue
             gold_files = target_gold_files(sample)
@@ -705,21 +731,30 @@ def evaluate_closed_tool_codex(
                     timeout_seconds=timeout_seconds,
                     max_tool_calls=max_tool_calls,
                     max_read_tokens=max_read_tokens,
-                        max_read_tokens_per_file=max_read_tokens_per_file,
-                        final_k=final_k,
-                        grep_top_k=grep_top_k,
-                        max_model_turns=max_model_turns or max_tool_calls + 4,
-                        seed_files=seed_files_by_sample.get(sample_id, []),
-                        seed_label=seed_label or (seed_details.stem if seed_details else ""),
-                        max_seed_tokens=max_seed_tokens,
-                        max_seed_tokens_per_file=max_seed_tokens_per_file,
+                    max_read_tokens_per_file=max_read_tokens_per_file,
+                    final_k=final_k,
+                    grep_top_k=grep_top_k,
+                    max_model_turns=max_model_turns or max_tool_calls + 4,
+                    seed_files=seed_files_by_sample.get(sample_id, []),
+                    seed_label=seed_label or (seed_details.stem if seed_details else ""),
+                    max_seed_tokens=max_seed_tokens,
+                    max_seed_tokens_per_file=max_seed_tokens_per_file,
                 )
-                if sample_id:
-                    details_by_id[sample_id] = detail
-                append_detail_jsonl(details_handle, detail)
             except Exception as exc:
-                failures.append({"sample_id": sample_id, "error": type(exc).__name__, "message": str(exc)})
-    details = [details_by_id[sample_id] for sample_id in ordered_ids if sample_id in details_by_id]
+                failure = {"sample_id": sample_id, "error": type(exc).__name__, "message": str(exc)}
+                failures.append(failure)
+                detail = getattr(exc, "partial_detail", None) or failed_closed_tool_detail(
+                    sample, gold_files, failure, policy="codex_closed_tool"
+                )
+                detail["closed_tool"]["failure"] = {**detail["closed_tool"].get("failure", {}), **failure}
+            if previous is not None:
+                detail["closed_tool"]["prior_attempts"] = prior_attempts(previous)
+            detail["resume_identity"] = {"experiment": experiment_identity, "sample": input_identities[sample_id]}
+            if sample_id:
+                details_by_id[sample_id] = detail
+            append_detail_jsonl(details_handle, detail)
+    details = [details_by_id[sample_id] for sample_id in ordered_ids if sample_id in details_by_id
+               and "failure" not in details_by_id[sample_id].get("closed_tool", {})]
 
     protocol_violations = [
         {
@@ -767,8 +802,9 @@ def evaluate_closed_tool_codex(
         "generated_at": utc_now(),
         "runtime_seconds": time.monotonic() - started,
     }
+    summary["experiment_identity"] = experiment_identity
     write_json(out_path, summary)
-    write_jsonl(details_path, details)
+    write_jsonl(details_path, details_by_id.values())
     ensure_parent(markdown_out_path)
     markdown_out_path.write_text(render_markdown(summary), encoding="utf-8")
     return summary
@@ -958,25 +994,36 @@ def run_closed_tool_codex_sample(
         timeout_seconds=timeout_seconds,
         sample_id=str(sample.get("id") or "sample"),
     )
-    detail = run_closed_tool_llm_sample(
-        sample=sample,
-        gold_files=gold_files,
-        query_text=query_text,
-        files=files,
-        model=model,
-        client=client,
-        max_tool_calls=max_tool_calls,
-        max_read_tokens=max_read_tokens,
-        max_read_tokens_per_file=max_read_tokens_per_file,
-        final_k=final_k,
-        grep_top_k=grep_top_k,
-        max_model_turns=max_model_turns,
-        policy="codex_closed_tool",
-        seed_files=seed_files,
-        seed_label=seed_label,
-        max_seed_tokens=max_seed_tokens,
-        max_seed_tokens_per_file=max_seed_tokens_per_file,
-    )
+    try:
+        detail = run_closed_tool_llm_sample(
+            sample=sample,
+            gold_files=gold_files,
+            query_text=query_text,
+            files=files,
+            model=model,
+            client=client,
+            max_tool_calls=max_tool_calls,
+            max_read_tokens=max_read_tokens,
+            max_read_tokens_per_file=max_read_tokens_per_file,
+            final_k=final_k,
+            grep_top_k=grep_top_k,
+            max_model_turns=max_model_turns,
+            policy="codex_closed_tool",
+            seed_files=seed_files,
+            seed_label=seed_label,
+            max_seed_tokens=max_seed_tokens,
+            max_seed_tokens_per_file=max_seed_tokens_per_file,
+        )
+    except Exception as exc:
+        partial = getattr(exc, "partial_detail", None)
+        if partial is not None:
+            record_codex_calls(partial, client, codex_bin)
+        raise
+    record_codex_calls(detail, client, codex_bin)
+    return detail
+
+
+def record_codex_calls(detail: dict[str, Any], client: Any, codex_bin: Path) -> None:
     detail["closed_tool"]["codex_bin"] = str(codex_bin)
     detail["closed_tool"]["codex_exec_calls"] = len(client.call_records)
     detail["closed_tool"]["codex_exec_returncodes"] = [record["returncode"] for record in client.call_records]
@@ -994,7 +1041,6 @@ def run_closed_tool_codex_sample(
         }
         for record in client.call_records
     ]
-    return detail
 
 
 def run_closed_tool_llm_sample(
@@ -1276,20 +1322,150 @@ def run_closed_tool_llm_sample(
 
 
 def load_existing_details(path: Path) -> dict[str, dict[str, Any]]:
-    details = {}
-    for row in read_jsonl(path):
-        sample_id = str(row.get("sample_id") or row.get("id") or "")
-        if sample_id:
-            details[sample_id] = row
+    details, _end, _newline, torn_tail = _read_details_checkpoint(path)
+    if torn_tail:
+        warnings.warn(f"Ignoring incomplete trailing details record in {path}", RuntimeWarning)
     return details
 
 
-def prepare_details_resume(path: Path, *, force: bool) -> tuple[dict[str, dict[str, Any]], Any]:
-    if force and path.exists():
-        path.unlink()
-    existing = load_existing_details(path) if path.exists() and not force else {}
+def _identity(value: Any) -> str:
+    digest = hashlib.sha256()
+    for chunk in json.JSONEncoder(sort_keys=True, ensure_ascii=False, separators=(",", ":")).iterencode(value):
+        digest.update(chunk.encode("utf-8"))
+    return digest.hexdigest()
+
+
+def _file_identity(path: Path) -> str | None:
+    if not path.is_file():
+        return None
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _experiment_identity(policy: str, arguments: dict[str, Any]) -> dict[str, Any]:
+    # Reporting paths, selection, force and retain_failures do not change a policy.
+    fields = (
+        "model", "reasoning_effort", "mode", "max_tool_calls", "max_read_tokens",
+        "max_read_tokens_per_file", "max_grep_calls", "final_k", "grep_top_k",
+        "max_model_turns", "require_read_submit", "timeout_seconds", "seed_label",
+        "seed_top_k", "max_seed_tokens", "max_seed_tokens_per_file",
+    )
+    settings = {key: arguments[key] for key in fields if key in arguments}
+    if "max_model_turns" in settings:
+        settings["max_model_turns"] = settings["max_model_turns"] or settings["max_tool_calls"] + 4
+    if "seed_label" in settings and not settings["seed_label"]:
+        seeds = arguments.get("seed_details")
+        settings["seed_label"] = seeds.stem if seeds else ""
+    library = Path(__file__).parent
+    source = {
+        path.relative_to(library).as_posix(): hashlib.sha256(
+            path.read_bytes().replace(b"\r\n", b"\n")
+        ).hexdigest()
+        for path in sorted(library.rglob("*.py"))
+    }
+    configuration: dict[str, Any] = {"protocol": 1, "policy": policy, "settings": settings, "source": source}
+    described = True
+    indexed = arguments.get("indexed_tools")
+    if indexed is not None:
+        described = callable(getattr(indexed.provider, "describe", None)) or indexed.provider_configuration is not None
+        configuration["indexed"] = {
+            "description": indexed.describe(), "configuration": indexed.provider_configuration,
+            "class": f"{type(indexed.provider).__module__}.{type(indexed.provider).__qualname__}",
+        }
+    if policy == "openai":
+        configuration["endpoint"] = {
+            key: os.environ.get(key) for key in ("OPENAI_BASE_URL", "OPENAI_ORG_ID", "OPENAI_PROJECT_ID")
+        }
+        configuration["endpoint"]["OPENAI_BASE_URL"] = os.environ.get("OPENAI_BASE_URL") or "https://api.openai.com/v1"
+        configuration["temperature"] = POLICY_TEMPERATURE
+        configuration["max_output_tokens"] = POLICY_MAX_OUTPUT_TOKENS
+    if policy == "codex":
+        configuration["binary"] = _file_identity(arguments["codex_bin"])
+        home = Path(os.environ.get("CODEX_HOME", str(Path.home()/".codex")))
+        configuration["config"] = _file_identity(home/"config.toml")
+    # Persist only the digest, never provider options, endpoints or config text.
+    return {"sha256": _identity(configuration), "provider_described": described}
+
+
+def _sample_identities(
+    samples: Iterable[tuple[dict[str, Any], dict[tuple[str, str], Path]]],
+    file_cache: dict[Path, dict[str, str]], *, seeds: dict[str, list[str]] | None = None,
+) -> dict[str, str]:
+    identities = {}
+    corpus_identities: dict[Path, str] = {}
+    for sample, manifest in samples:
+        key = (str(sample.get("repo") or ""), str(sample.get("base_commit") or ""))
+        path = manifest.get(key)
+        if path is not None and path not in file_cache:
+            file_cache[path] = load_file_texts(path)
+        if path is not None and path not in corpus_identities:
+            corpus_identities[path] = _identity(file_cache[path])
+        sample_id = str(sample.get("id") or "")
+        identities[sample_id] = _identity({
+            "sample": sample, "corpus": corpus_identities.get(path),
+            "seed_files": (seeds or {}).get(sample_id, []),
+        })
+    return identities
+
+
+def _read_details_checkpoint(path: Path) -> tuple[dict[str, dict[str, Any]], int, bool, bool]:
+    """Read committed JSONL rows; only an unterminated tail may be recovered."""
+    details = {}
+    end = 0
+    needs_newline = False
+    with path.open("rb") as handle:
+        for number, raw in enumerate(handle, 1):
+            if not raw.strip():
+                end += len(raw)
+                continue
+            try:
+                row = json.loads(raw)
+            except (ValueError, UnicodeError) as exc:
+                if not raw.endswith(b"\n"):
+                    return details, end, False, True
+                raise ValueError(f"Invalid details record at {path}:{number}") from exc
+            if not isinstance(row, dict):
+                raise ValueError(f"Details record must be an object at {path}:{number}")
+            sample_id = str(row.get("sample_id") or row.get("id") or "")
+            if not sample_id:
+                raise ValueError(f"Missing sample ID at {path}:{number}")
+            details[sample_id] = row
+            end += len(raw)
+            needs_newline = not raw.endswith(b"\n")
+    return details, end, needs_newline, False
+
+
+def prepare_details_resume(
+    path: Path, *, force: bool, experiment_identity: dict[str, Any] | None = None,
+    sample_identities: dict[str, str] | None = None,
+) -> tuple[dict[str, dict[str, Any]], Any]:
+    existing, end, needs_newline, torn_tail = (
+        _read_details_checkpoint(path) if path.exists() and not force else ({}, 0, False, False)
+    )
+    if experiment_identity is not None:
+        for sample_id, row in existing.items():
+            identity = row.get("resume_identity")
+            if not isinstance(identity, dict) or identity.get("experiment") != experiment_identity:
+                raise ValueError("Incompatible or legacy details experiment; use a separate details path or explicit force reset")
+            if not experiment_identity["provider_described"]:
+                raise ValueError("Resume needs a stable provider describe() or provider configuration; use a separate details path or force reset")
+            if sample_id in (sample_identities or {}) and identity.get("sample") != sample_identities[sample_id]:
+                raise ValueError(f"Sample identity changed for {sample_id}; use a separate details path or explicit force reset")
     ensure_parent(path)
-    return existing, path.open("a", encoding="utf-8")
+    if force:
+        write_jsonl(path, [])
+    elif torn_tail:
+        warnings.warn(f"Recovering incomplete trailing details record in {path}", RuntimeWarning)
+        with path.open("r+b") as handle:
+            handle.truncate(end)
+    handle = path.open("a", encoding="utf-8", newline="\n")
+    if needs_newline:
+        handle.write("\n")
+        handle.flush()
+    return existing, handle
 
 
 def append_detail_jsonl(handle: Any, row: dict[str, Any]) -> None:
@@ -2002,7 +2178,7 @@ def report_closed_tool_budget_curve(
     budgets: Iterable[int] = (2, 4, 6, 8),
     keep_list: Path | None = None,
 ) -> dict[str, Any]:
-    details = [row for row in read_jsonl(details_path) if isinstance(row, dict)]
+    details = list(load_existing_details(details_path).values())
     missing: list[str] = []
     if keep_list is not None:
         details, missing = selected_details(details, keep_list)
@@ -2028,6 +2204,9 @@ def report_closed_tool_budget_curve(
         "budgets": budget_values,
         "keep_list": str(keep_list) if keep_list is not None else None,
         "missing_selected": missing,
+        # Actual attempt costs, separate from counterfactual budget prefixes.
+        # Latest rows already carry prior_attempts; do not sum journal versions.
+        "observed_run_costs": summarize_closed_tool(details),
         "definition": (
             "Post-hoc prefix diagnostic: for each closed-tool trajectory, "
             "score files read within the first B tool calls as the acquired context. "

@@ -30,7 +30,7 @@ needs a small callable that forwards these calls to its server.
 
 ```python
 class Provider:
-    def describe(self) -> dict: ...  # optional; identifies the build in the summary
+    def describe(self) -> dict: ...  # identifies the provider/build for reporting and resume
     def prepare(self, *, repo, base_commit, paths) -> dict: ...
     def call(self, *, tool, arguments, repo, base_commit, limit) -> list[dict]: ...
 ```
@@ -72,17 +72,62 @@ per-snapshot index builds, the policy settings, and the harness commit. Index
 build time is a per-snapshot cost and is reported separately from the policy
 run.
 
-With `--retain-failures`, a sample whose policy run raises scores as empty
+Failed attempts are always checkpointed, even when they are excluded from the
+summary. With `--retain-failures`, a sample whose policy run raises scores as empty
 context, so the denominator stays the selected set, while its costs are the
 ones it actually incurred: model tokens, tool calls, read and observation
 tokens, and its index status. The details file keeps the failed attempt with
 its partial trace. Resuming retries it; the new trajectory lists the earlier
 attempts, with their costs, failures, traces, and index status, under
 `prior_attempts`, and the summary totals them. The summary keeps one
-index-build record per snapshot: the first record from the trajectories,
-their earlier attempts, or this run that was not served from a cache. A
+index-build record per snapshot: the first available cold build from the
+trajectories, their earlier attempts, or this run. An unavailable preparation
+without a `cached` flag does not hide a later successful build. If no cold
+build is recorded, the summary uses an available cached record, otherwise the
+first failed preparation. All attempt statuses remain in the details. A
 resumed run, or a retry that hits the cache, therefore reports the original
 build once.
+
+## Resuming one experiment
+
+The scripted, OpenAI, and Codex closed-tool evaluators keep cumulative records
+in `--details`; each invocation's summary covers only its current selection.
+Changing the keep-list, sample order, input filename, `--limit-samples`, output
+paths, or `--retain-failures` does not discard earlier trajectories. Completed
+samples are reused; failed samples are retried and retain their prior costs.
+Use one writer per details file.
+
+Each new record stores a resume fingerprint for the effective policy, budgets,
+model/provider settings, indexed-tool configuration, and harness Python source,
+plus the sample contents, released corpus texts, and selected Codex seed files.
+Resume validates every saved experiment fingerprint and every selected saved
+sample before dispatch or output mutation. Corpus texts are hashed once per
+snapshot per invocation. Selection/reporting options are excluded from the
+experiment fingerprint; effective policy or input changes require a separate
+details file or an explicit `--force` reset. `--force` discards all old records,
+including failed attempts and their costs; it is not a migration operation.
+
+Legacy records without fingerprints cannot be verified and are rejected by
+the evaluators unless explicitly reset. They remain readable by the report
+commands. CLI provider factories/options participate in the fingerprint;
+Python callers must supply a stable `describe()` or explicit
+`IndexedTools(..., provider_configuration=...)` to resume an indexed run.
+Provider descriptions must identify configuration/build, not mutable counters.
+Fingerprints store digests, not raw options or credentials. They cannot attest
+remote model weights or undeclared provider state. Codex fingerprints bind its
+executable and `CODEX_HOME/config.toml`; keep other ambient Codex configuration
+fixed when resuming.
+
+Details append after each sample and compact via a sibling temporary file and
+atomic replacement. An incomplete, unterminated last append is recoverable
+with a warning; malformed interior or newline-terminated records are rejected
+without changing the file. This protects checkpoints from an interrupted
+compaction, not concurrent writers or a transaction across summary/report files.
+
+The budget-prefix report deduplicates journals by sample ID (latest record
+wins), with or without a keep-list. Its `observed_run_costs` reports actual
+latest-attempt costs and recorded `prior_attempts` once, separately from the
+post-hoc prefixes; prefix scores are not counterfactual rerun costs.
 
 By default, a submit that names no file already read ends the episode with
 empty context. With `--require-read-submit`, that submit is rejected without
