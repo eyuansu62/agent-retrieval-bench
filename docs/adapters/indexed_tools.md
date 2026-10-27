@@ -80,8 +80,12 @@ tokens, and its index status. The details file keeps the failed attempt with
 its partial trace. Resuming retries it; the new trajectory lists the earlier
 attempts, with their costs, failures, traces, and index status, under
 `prior_attempts`, and the summary totals them. The summary keeps one
-index-build record per snapshot: the first available cold build from the
-trajectories, their earlier attempts, or this run. An unavailable preparation
+index-build record per selected snapshot. Its construction record is resolved
+from cumulative history, including unselected samples sharing that snapshot.
+The first available cold build in persisted sample order (and attempt order
+within each sample) wins; current-run preparations are considered afterward.
+Snapshot output is sorted by repository and base commit, so changing the
+selection or reordering completed inputs cannot change the construction record. An unavailable preparation
 without a `cached` flag does not hide a later successful build. If no cold
 build is recorded, the summary uses an available cached record, otherwise the
 first failed preparation. All attempt statuses remain in the details. A
@@ -95,7 +99,11 @@ in `--details`; each invocation's summary covers only its current selection.
 Changing the keep-list, sample order, input filename, `--limit-samples`, output
 paths, or `--retain-failures` does not discard earlier trajectories. Completed
 samples are reused; failed samples are retried and retain their prior costs.
-Use one writer per details file.
+Failed Codex subprocesses keep their invocation count, exit code or timeout
+marker, event count, protocol violations, and bounded output excerpts. Timeout
+exit codes are null because no exit status was returned. These records remain
+in `prior_attempts` after a successful retry; completed resumes do not add them
+again. Use one writer per details file.
 
 Each new record stores a resume fingerprint for the effective policy, budgets,
 model/provider settings, indexed-tool configuration, and harness Python source,

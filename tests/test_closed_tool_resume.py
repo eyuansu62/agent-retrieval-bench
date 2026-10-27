@@ -47,6 +47,8 @@ class ClosedToolResumeTests(unittest.TestCase):
             detail = real(**{key: kwargs[key] for key in keys},
                           max_grep_calls=kwargs.get('max_grep_calls', 8))
             detail['closed_tool']['model_usage'] = {'input_tokens': 7, 'output_tokens': 1}
+            if 'index_status' in kwargs:
+                detail['closed_tool']['index_status'] = kwargs['index_status']
             if kwargs['sample']['id'] in failure_ids:
                 error = RuntimeError('offline policy failure')
                 error.partial_detail = detail
@@ -408,3 +410,116 @@ class ClosedToolResumeTests(unittest.TestCase):
                 self.assertEqual(provider.preparations, 0)
                 self.assertEqual(self.calls, [])
                 self.assertEqual((self.root/'details.jsonl').read_bytes(), before)
+
+    def indexed_arm(self, statuses, **options):
+        class Provider:
+            def describe(self):
+                return {'version': 'offline-accounting'}
+
+            def prepare(self, **kwargs):
+                return statuses.pop(0)
+
+            def call(self, **kwargs):
+                return []
+
+        return self.run_arm('openai', mode='indexed_interactive',
+                            indexed_tools=IndexedTools(Provider(), ['symbol_search']), **options)
+
+    def test_index_construction_survives_cached_subset_and_full_resume(self):
+        cold = dict(available=True, cached=False, build_seconds=12)
+        cached = dict(available=True, cached=True, build_seconds=0)
+        original = self.indexed_arm([cold], force=True, limit_samples=1)['index_builds']
+        keep = self.root/'keep.jsonl'
+        self.write(keep, [{'sample_id': 's2'}])
+        self.assertEqual(self.indexed_arm([cached], keep_list=keep)['index_builds'], original)
+        self.assertEqual(self.indexed_arm([], keep_list=keep)['index_builds'], original)
+        self.assertEqual(self.indexed_arm([])['index_builds'], original)
+        self.assertEqual(self.calls, ['s1', 's2'])
+        self.write(keep, [])
+        self.assertEqual(self.indexed_arm([], keep_list=keep)['index_builds'], [])
+
+    def test_index_construction_is_stable_when_completed_input_reorders(self):
+        cold = lambda seconds: dict(available=True, cached=False, build_seconds=seconds)
+        original = self.indexed_arm([cold(12)], force=True, limit_samples=1)['index_builds']
+        self.assertEqual(self.indexed_arm([cold(20)])['index_builds'], original)
+        self.assertEqual(self.indexed_arm([])['index_builds'], original)
+        self.write(self.sample_path, self.samples[::-1])
+        self.assertEqual(self.indexed_arm([])['index_builds'], original)
+        self.assertEqual(self.calls, ['s1', 's2'])
+
+    def test_index_history_excludes_other_selected_snapshots(self):
+        self.samples[1]['repo'] = 'example/other'
+        self.write(self.sample_path, self.samples)
+        self.write(self.root/'corpus_manifest.jsonl', [dict(
+            repo=sample['repo'], base_commit='base', status='ok', chunks_path=str(self.chunks),
+        ) for sample in self.samples])
+        self.indexed_arm([dict(available=True, cached=False, build_seconds=12),
+                          dict(available=True, cached=False, build_seconds=20)], force=True)
+        keep = self.root/'keep.jsonl'
+        self.write(keep, [{'sample_id': 's2'}])
+        builds = self.indexed_arm([], keep_list=keep)['index_builds']
+        self.assertEqual(len(builds), 1)
+        self.assertEqual((builds[0]['repo'], builds[0]['build_seconds']), ('example/other', 20))
+        self.assertEqual(self.calls, ['s1', 's2'])
+
+    def test_codex_process_errors_survive_successful_retry_and_noop_resume(self):
+        real_run = evaluator.subprocess.run
+        event = json.dumps({'type': 'item.completed', 'item': {'tool': 'functions.exec_command'}}) + '\n'
+        for failure in ('nonzero', 'timeout', 'timeout-no-file'):
+            with self.subTest(failure=failure):
+                invocations = []
+                failing = True
+                actions = iter([{'action': 'read_file', 'path': 'subject.py'},
+                                {'action': 'submit', 'files': ['subject.py']}])
+
+                def process(command, **kwargs):
+                    if '--output-last-message' not in command:
+                        return real_run(command, **kwargs)
+                    invocations.append(command)
+                    output = Path(command[command.index('--output-last-message') + 1])
+                    if failing:
+                        if failure != 'timeout-no-file':
+                            output.write_text('partial action', encoding='utf-8')
+                        if failure.startswith('timeout'):
+                            raise evaluator.subprocess.TimeoutExpired(
+                                command, kwargs['timeout'], output=event.encode(), stderr=b'timeout marker',
+                            )
+                        return evaluator.subprocess.CompletedProcess(command, 3, event, 'exit marker')
+                    output.write_text(json.dumps(next(actions)), encoding='utf-8')
+                    return evaluator.subprocess.CompletedProcess(command, 0, '', '')
+
+                def evaluate(**options):
+                    return evaluator.evaluate_closed_tool_codex(
+                        sample_paths=[self.sample_path], corpus_dir=self.root,
+                        out_path=self.root/'summary.json', details_path=self.root/'details.jsonl',
+                        markdown_out_path=self.root/'report.md', codex_bin=Path(sys.executable),
+                        work_root=self.root/'codex-work', timeout_seconds=1, limit_samples=1, **options,
+                    )
+
+                with patch.dict(os.environ, {'CODEX_HOME': str(self.root/'offline-home')}), patch.object(
+                    evaluator.subprocess, 'run', side_effect=process,
+                ):
+                    evaluate(force=True)
+                    failed = self.saved()['s1']['closed_tool']
+                    self.assertEqual(failed['codex_exec_calls'], 1)
+                    self.assertEqual(failed['codex_exec_returncodes'], [None if failure.startswith('timeout') else 3])
+                    self.assertEqual(len(failed['protocol_violations']), 1)
+                    record = failed['codex_exec_events'][0]
+                    self.assertEqual(record['json_events'], 1)
+                    self.assertEqual(record['timed_out'], failure.startswith('timeout'))
+                    self.assertIn('marker', record['stderr_excerpt'])
+                    self.assertIn('functions.exec_command', record['stdout_excerpt'])
+                    self.assertEqual(record['output_excerpt'], event if failure == 'timeout-no-file' else 'partial action')
+                    failing = False
+                    evaluate()
+                    complete = self.saved()['s1']['closed_tool']
+                    self.assertNotIn('failure', complete)
+                    self.assertEqual(complete['codex_exec_calls'], 2)
+                    self.assertEqual(len(complete['prior_attempts']), 1)
+                    prior = complete['prior_attempts'][0]
+                    for field in ('codex_exec_calls', 'codex_exec_returncodes', 'codex_exec_events',
+                                  'protocol_violations'):
+                        self.assertEqual(prior[field], failed[field])
+                    evaluate()
+                    self.assertEqual(self.saved()['s1']['closed_tool'], complete)
+                    self.assertEqual(len(invocations), 3)

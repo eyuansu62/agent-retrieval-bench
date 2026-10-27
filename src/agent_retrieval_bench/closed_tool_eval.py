@@ -416,7 +416,7 @@ def evaluate_closed_tool_openai(
     if indexed_tools is not None:
         summary["indexed_tools"] = indexed_tools.describe()
         # Index builds are a per-snapshot cost, reported apart from the policy run.
-        summary["index_builds"] = index_builds(details, indexed_tools.snapshots)
+        summary["index_builds"] = index_builds(details, indexed_tools.snapshots, history=details_by_id.values())
     summary["experiment_identity"] = experiment_identity
     write_json(out_path, summary)
     write_jsonl(details_path, details_by_id.values())
@@ -510,28 +510,39 @@ def prior_attempts(previous: dict[str, Any]) -> list[dict[str, Any]]:
     return [*policy.get("prior_attempts", []), attempt]
 
 
-def index_builds(details: list[dict[str, Any]], snapshots: dict[tuple[str, str], dict[str, Any]]) -> list[dict[str, Any]]:
-    """One record per snapshot: its construction, else its first preparation.
+def index_builds(
+    details: list[dict[str, Any]], snapshots: dict[tuple[str, str], dict[str, Any]],
+    *, history: Iterable[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    """Construction costs for selected snapshots, resolved from cumulative history.
 
-    Records come from each stored trajectory and its earlier attempts, then
-    from this run's preparations. A failed preparation is not a construction;
-    choose the first available cold build, then an available cached record,
-    else the first failure. Earlier attempt costs remain in the details.
+    Prefer the first available cold build in persisted detail order, then an
+    available cached record, else the first failure. Attempt order within each
+    detail is preserved. Input/selection order cannot reorder this history;
+    report the selected snapshot keys in sorted order.
     """
+    selected = {(str(row.get("repo") or ""), str(row.get("base_commit") or "")) for row in details}
+    selected.update(snapshots)
     records: dict[tuple[str, str], list[dict[str, Any]]] = {}
-    for detail in details:
+    for detail in history if history is not None else details:
         policy = detail.get("closed_tool", {})
         key = (str(detail.get("repo") or ""), str(detail.get("base_commit") or ""))
+        if key not in selected:
+            continue
         attempts = [attempt.get("index_status") for attempt in policy.get("prior_attempts", [])]
         for status in [*attempts, policy.get("index_status")]:
             if isinstance(status, dict):
                 records.setdefault(key, []).append({"repo": key[0], "base_commit": key[1], **status})
     for key, status in snapshots.items():
         records.setdefault(key, []).append(dict(status))
-    return [next(
-        (row for row in rows if row.get("available") is True and row.get("cached") is not True),
-        next((row for row in rows if row.get("available") is True), rows[0]),
-    ) for rows in records.values()]
+    builds = []
+    for key in sorted(records):
+        rows = records[key]
+        builds.append(next(
+            (row for row in rows if row.get("available") is True and row.get("cached") is not True),
+            next((row for row in rows if row.get("available") is True), rows[0]),
+        ))
+    return builds
 
 
 def select_closed_tool_samples(
@@ -1038,6 +1049,9 @@ def record_codex_calls(detail: dict[str, Any], client: Any, codex_bin: Path) -> 
             "returncode": record["returncode"],
             "json_events": record["json_events"],
             "stderr_excerpt": record.get("stderr_excerpt", ""),
+            "stdout_excerpt": record.get("stdout_excerpt", ""),
+            "output_excerpt": record.get("output_text", "")[-1000:],
+            "timed_out": record.get("timed_out", False),
         }
         for record in client.call_records
     ]
@@ -1655,6 +1669,14 @@ def response_usage(response: Any) -> dict[str, int]:
     return {key: value for key, value in counts.items() if isinstance(value, int)}
 
 
+class CodexExecError(RuntimeError):
+    """A failed invocation whose execution audit must survive propagation."""
+
+    def __init__(self, message: str, record: dict[str, Any]) -> None:
+        super().__init__(message)
+        self.record = record
+
+
 class CodexActionClient:
     def __init__(self, *, codex_bin: Path, work_root: Path, timeout_seconds: int, sample_id: str) -> None:
         self.codex_bin = codex_bin
@@ -1666,15 +1688,19 @@ class CodexActionClient:
 
     def create(self, **kwargs: Any) -> Any:
         turn = len(self.call_records) + 1
-        record = run_codex_exec_action(
-            codex_bin=self.codex_bin,
-            model=str(kwargs.get("model") or "gpt-5.5"),
-            prompt=str(kwargs.get("input") or ""),
-            work_root=self.work_root,
-            timeout_seconds=self.timeout_seconds,
-            sample_id=self.sample_id,
-            turn=turn,
-        )
+        try:
+            record = run_codex_exec_action(
+                codex_bin=self.codex_bin,
+                model=str(kwargs.get("model") or "gpt-5.5"),
+                prompt=str(kwargs.get("input") or ""),
+                work_root=self.work_root,
+                timeout_seconds=self.timeout_seconds,
+                sample_id=self.sample_id,
+                turn=turn,
+            )
+        except CodexExecError as exc:
+            self.call_records.append(exc.record)
+            raise
         self.call_records.append(record)
         return SimpleTextResponse(record["output_text"])
 
@@ -1730,6 +1756,7 @@ def run_codex_exec_action(
             model,
             "-",
         ]
+        timeout_error = None
         try:
             result = subprocess.run(
                 command,
@@ -1740,26 +1767,36 @@ def run_codex_exec_action(
                 check=False,
             )
         except subprocess.TimeoutExpired as exc:
-            raise RuntimeError(f"codex exec timed out after {timeout_seconds}s on turn {turn}") from exc
-        output_text = output_path.read_text(encoding="utf-8") if output_path.exists() else result.stdout
-        events = parse_codex_json_events(result.stdout)
+            timeout_error = exc
+            stdout, stderr, returncode = exc.stdout, exc.stderr, None
+        else:
+            stdout, stderr, returncode = result.stdout, result.stderr, result.returncode
+        stdout = stdout.decode("utf-8", errors="replace") if isinstance(stdout, bytes) else stdout or ""
+        stderr = stderr.decode("utf-8", errors="replace") if isinstance(stderr, bytes) else stderr or ""
+        output_text = output_path.read_text(encoding="utf-8", errors="replace") if output_path.exists() else stdout
+        events = parse_codex_json_events(stdout)
         record = {
             "turn": turn,
-            "returncode": result.returncode,
+            "returncode": returncode,
+            "timed_out": timeout_error is not None,
             "output_text": output_text,
             "json_events": len(events),
             "protocol_violations": detect_codex_protocol_violations(events),
-            "stderr_excerpt": result.stderr[-1000:],
-            "stdout_excerpt": result.stdout[-1000:],
+            "stderr_excerpt": stderr[-1000:],
+            "stdout_excerpt": stdout[-1000:],
         }
-        if result.returncode != 0:
-            raise RuntimeError(
+        if timeout_error is not None:
+            raise CodexExecError(
+                f"codex exec timed out after {timeout_seconds}s on turn {turn}", record,
+            ) from timeout_error
+        if returncode != 0:
+            raise CodexExecError(
                 "codex exec failed on turn {turn}: stderr={stderr!r} stdout={stdout!r} output={output!r}".format(
                     turn=turn,
-                    stderr=result.stderr[-500:],
-                    stdout=result.stdout[-500:],
+                    stderr=stderr[-500:],
+                    stdout=stdout[-500:],
                     output=output_text[-500:],
-                )
+                ), record,
             )
         return record
 
