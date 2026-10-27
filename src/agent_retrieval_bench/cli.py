@@ -2835,11 +2835,13 @@ def main(argv: list[str] | None = None) -> int:
         if args.mode == "indexed_interactive":
             if not args.tool_provider or not args.indexed_tools:
                 raise SystemExit("indexed_interactive needs --tool-provider and --indexed-tools")
+            provider_options = parse_provider_options(args.tool_provider_option)
             indexed_tools = IndexedTools(
-                load_tool_provider(args.tool_provider, parse_provider_options(args.tool_provider_option)),
+                load_tool_provider(args.tool_provider, provider_options),
                 [tool.strip() for tool in args.indexed_tools.split(",") if tool.strip()],
                 max_results=args.max_index_results,
                 max_observation_tokens=args.max_index_observation_tokens,
+                provider_configuration={"factory": args.tool_provider, "options": provider_options},
             )
         elif args.tool_provider or args.indexed_tools:
             raise SystemExit("--tool-provider and --indexed-tools need --mode indexed_interactive")

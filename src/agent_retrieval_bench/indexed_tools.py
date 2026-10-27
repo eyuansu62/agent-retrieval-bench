@@ -90,6 +90,7 @@ class IndexedTools:
         *,
         max_results: int = DEFAULT_MAX_INDEX_RESULTS,
         max_observation_tokens: int = DEFAULT_MAX_INDEX_OBSERVATION_TOKENS,
+        provider_configuration: dict[str, Any] | None = None,
     ) -> None:
         requested = set(tools)
         unknown = requested - set(INDEXED_TOOLS)
@@ -108,6 +109,7 @@ class IndexedTools:
         self.tools = tuple(tool for tool in INDEXED_TOOLS if tool in requested)
         self.max_results = max_results
         self.max_observation_tokens = max_observation_tokens
+        self.provider_configuration = provider_configuration
         self.snapshots: dict[tuple[str, str], dict[str, Any]] = {}
 
     def describe(self) -> dict[str, Any]:
